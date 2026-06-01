@@ -10,8 +10,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks
-from database import init_db # Importamos la función desde tu archivo nuevo
+from database import init_db, engine, get_session
 from models import User
+from fastapi import FastAPI, Depends, HTTPException, status
+from sqlmodel import Session, select
 import os
 import pandas as pd
 
@@ -185,24 +187,24 @@ EMPRESAS_DB = {
 }
 
 @app.post("/v1/auth/login")
-async def login(data: LoginRequest):
-    user = EMPRESAS_DB.get(data.username)
+def login(formulario_data: dict, session: Session = Depends(get_session)):
+    # 1. Extraer los datos que envía tu formulario HTML
+    email_recibido = formulario_data.get("email")
+    password_recibida = formulario_data.get("password")
     
-    # Validamos que el usuario exista y la contraseña sea idéntica
-    if not user or user["password"] != data.password:
+    # 2. Buscar al usuario en la base de datos de Railway
+    statement = select(User).where(User.email == email_recibido)
+    usuario = session.exec(statement).first()
+    
+    # 3. Si no existe el usuario O la contraseña no coincide
+    if not usuario or not usuario.verify_password(password_recibida):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario o contraseña incorrectos"
+            detail="Correo o contraseña incorrectos"
         )
-    
-    # Si las credenciales son válidas, devolvemos el token y datos de la empresa
-    return {
-        "access_token": f"token_seguro_{user['tenant_id']}", 
-        "token_type": "bearer",
-        "empresa": user["nombre"],
-        "tenant_id": user["tenant_id"]
-    }
-
+        
+    # 4. Si todo está bien, permites el ingreso
+    return {"status": "success", "message": "¡Bienvenido al sistema!"}
 @app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
 async def process_reconciliation(
     background_tasks: BackgroundTasks,
