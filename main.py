@@ -187,30 +187,46 @@ EMPRESAS_DB = {
 }
 
 @app.post("/v1/auth/login")
-def login(formulario_data: dict, session: Session = Depends(get_session)):
-    # 1. Esto guardará en los logs de Railway exactamente lo que envió tu formulario
-    print("--> frontend ENVIÓ:", formulario_data)
+@app.post("/v1/auth/login")
+def login(formulario_data: dict = None, session: Session = Depends(get_session)):
     
-    # 2. Buscamos 'email' o 'username' por si acaso el HTML usa un nombre distinto
+    # 1. Si los datos llegan vacíos desde JavaScript
+    if not formulario_data:
+        raise HTTPException(
+            status_code=401, 
+            detail="ERRORfrontend: El servidor recibió un formulario totalmente VACÍO."
+        )
+    
     email_recibido = formulario_data.get("email") or formulario_data.get("username")
     password_recibida = formulario_data.get("password")
     
-    # 3. Buscar en PostgreSQL
+    # 2. Si JavaScript envió datos, pero con nombres incorrectos
+    if not email_recibido:
+        llaves_enviadas = list(formulario_data.keys())
+        raise HTTPException(
+            status_code=401, 
+            detail=f"ERRORfrontend: No enviaste ni 'email' ni 'username'. Enviaste estos campos: {llaves_enviadas}"
+        )
+        
+    # 3. Buscar en la Base de Datos
     statement = select(User).where(User.email == email_recibido)
     usuario = session.exec(statement).first()
     
-    # 4. Diagnóstico preciso en los logs de Railway
+    # 4. Si el correo no existe en Railway
     if not usuario:
-        print(f"--> ERROR: El correo '{email_recibido}' NO existe en PostgreSQL de Railway")
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+        raise HTTPException(
+            status_code=401, 
+            detail=f"ERROR_BASE_DATOS: El correo '{email_recibido}' NO existe registrado en PostgreSQL."
+        )
         
+    # 5. Si el correo existe pero la contraseña está mal
     if not usuario.verify_password(password_recibida):
-        print(f"--> ERROR: El usuario '{email_recibido}' existe, pero la CONTRASEÑA ES INCORRECTA")
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+        raise HTTPException(
+            status_code=401, 
+            detail="ERROR_PASSWORD: El usuario existe, pero la CONTRASEÑA es incorrecta."
+        )
         
-    print(f"--> ¡ÉXITO! El usuario '{email_recibido}' se ha logueado correctamente.")
-    return {"status": "success", "message": "¡Bienvenido al sistema!"}
-@app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
+    return {"status": "success", "message": "¡Bienvenido!"}@app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
 async def process_reconciliation(
     background_tasks: BackgroundTasks,
     file_mayor: UploadFile = File(...),
