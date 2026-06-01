@@ -14,6 +14,7 @@ from database import init_db, engine, get_session
 from models import User
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlmodel import Session, select
+from fastapi.responses import HTMLResponse
 import os
 import pandas as pd
 
@@ -289,6 +290,38 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
         "progress_percentage": task["progress"],
         "results": task.get("results") if task["status"] == "completed" else None,
         "error": task.get("error") if task["status"] == "failed" else None
+    }
+@app.get("/verificar-base-datos-secreta")
+def verificar_db(session: Session = Depends(get_session)):
+    # 1. Traer todos los usuarios que existen actualmente en tu PostgreSQL de Railway
+    todos_los_usuarios = session.exec(select(User)).all()
+    lista_emails = [u.email for u in todos_los_usuarios]
+    
+    # 2. Buscar específicamente al administrador
+    statement = select(User).where(User.email == "auditor@retail.com.py")
+    admin = session.exec(statement).first()
+    
+    estado = ""
+    if admin:
+        # Si ya existe, le obligamos a tener la contraseña correcta por si acaso
+        admin.set_password("Fg200472")
+        session.add(admin)
+        session.commit()
+        estado = "El usuario ya existía. Acabo de REINICIAR su contraseña a: Fg200472"
+    else:
+        # Si no existe, lo creamos desde cero aquí mismo
+        nuevo_admin = User(email="auditor@retail.com.py")
+        nuevo_admin.set_password("Fg200472")
+        session.add(nuevo_admin)
+        session.commit()
+        estado = "El usuario NO existía. Lo acabo de CREAR desde cero con la contraseña: Fg200472"
+        # Actualizamos la lista para mostrarlo
+        lista_emails.append("auditor@retail.com.py")
+        
+    return {
+        "usuarios_registrados_en_postgresql": lista_emails,
+        "resultado_de_la_operacion": estado,
+        "instrucciones": "Intenta loguearte ahora con el email 'auditor@retail.com.py' y la contraseña 'Fg200472'"
     }
 from fastapi.responses import HTMLResponse  # <-- Asegúrate de que esta línea esté arriba con tus otros imports
 import os
