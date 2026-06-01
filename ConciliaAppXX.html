@@ -643,7 +643,7 @@ tbody tr.has-diff td{background:var(--amberb);}
 
     <div style="text-align: left; margin-bottom: 20px;">
       <label style="color: #94a3b8; font-size: 12px; font-weight: 600; text-transform: uppercase;">Correo Corporativo</label>
-      <input type="email" id="login-email" value="auditor@retail.com.py" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff; margin-top: 6px; box-sizing: border-box; outline: none; font-size: 14px;">
+      <form input type="email" id="login-email" value="auditor@retail.com.py" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff; margin-top: 6px; box-sizing: border-box; outline: none; font-size: 14px;">
     </div>
 
     <div style="text-align: left; margin-bottom: 30px;">
@@ -651,18 +651,18 @@ tbody tr.has-diff td{background:var(--amberb);}
       <input type="password" id="login-pass" value="Retail2026!" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff; margin-top: 6px; box-sizing: border-box; outline: none; font-size: 14px;">
     </div>
 
-    <button onclick="procesarLoginFormulario()"
-// Detectar la tecla Enter en el campo de contraseña
-document.getElementById('login-pass').addEventListener('keypress', function (e) {
-    if (e.key === 'Enter') {
-        procesarLoginFormulario();
-    }
+    <button type="submit"...>
+// Escuchamos el evento 'submit' del formulario
+document.getElementById('login-form').addEventListener('submit', function(event) {
+    event.preventDefault(); // IMPORTANTE: Esto evita que la página se refresque
+    procesarLoginFormulario(); // Llamamos a tu función de login
+});
 });
  style="width: 100%; background: #3b82f6; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 15px; transition: background 0.2s;">
       Ingresar al Sistema
 
     </button>
-    
+    </form>
   </div>
 </div>
 <!-- ══ SIDEBAR (Flotante Moderno) ══ -->
