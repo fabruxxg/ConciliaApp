@@ -188,22 +188,27 @@ EMPRESAS_DB = {
 
 @app.post("/v1/auth/login")
 def login(formulario_data: dict, session: Session = Depends(get_session)):
-    # 1. Extraer los datos que envía tu formulario HTML
-    email_recibido = formulario_data.get("email")
+    # 1. Esto guardará en los logs de Railway exactamente lo que envió tu formulario
+    print("--> frontend ENVIÓ:", formulario_data)
+    
+    # 2. Buscamos 'email' o 'username' por si acaso el HTML usa un nombre distinto
+    email_recibido = formulario_data.get("email") or formulario_data.get("username")
     password_recibida = formulario_data.get("password")
     
-    # 2. Buscar al usuario en la base de datos de Railway
+    # 3. Buscar en PostgreSQL
     statement = select(User).where(User.email == email_recibido)
     usuario = session.exec(statement).first()
     
-    # 3. Si no existe el usuario O la contraseña no coincide
-    if not usuario or not usuario.verify_password(password_recibida):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo o contraseña incorrectos"
-        )
+    # 4. Diagnóstico preciso en los logs de Railway
+    if not usuario:
+        print(f"--> ERROR: El correo '{email_recibido}' NO existe en PostgreSQL de Railway")
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
         
-    # 4. Si todo está bien, permites el ingreso
+    if not usuario.verify_password(password_recibida):
+        print(f"--> ERROR: El usuario '{email_recibido}' existe, pero la CONTRASEÑA ES INCORRECTA")
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+        
+    print(f"--> ¡ÉXITO! El usuario '{email_recibido}' se ha logueado correctamente.")
     return {"status": "success", "message": "¡Bienvenido al sistema!"}
 @app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
 async def process_reconciliation(
