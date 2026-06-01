@@ -11,15 +11,26 @@ from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks
 from database import init_db # Importamos la función desde tu archivo nuevo
+from models import User
 import os
 import pandas as pd
 
 app = FastAPI()
-# Configuramos el evento de inicio (startup)
 @app.on_event("startup")
 def on_startup():
-    init_db()  # Esto crea las tablas automáticamente al encender el servidor
-
+    init_db() # Crea las tablas si no existen
+    
+    # Creamos el usuario administrador inicial si no existe
+    with Session(engine) as session:
+        statement = select(User).where(User.email == "auditor@retail.com.py")
+        usuario_existente = session.exec(statement).first()
+        
+        if not usuario_existente:
+            admin = User(email="Fabrizio Galeano")
+            admin.set_password("Fg200472") # Se guarda encriptada
+            session.add(admin)
+            session.commit()
+            print("¡Usuario administrador inicial creado en PostgreSQL!")
 # ═════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE CORS: PERMITE QUE TU HTML SE CONECTE CON PYTHON
 # ═════════════════════════════════════════════════════════════════════
