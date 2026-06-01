@@ -653,6 +653,12 @@ tbody tr.has-diff td{background:var(--amberb);}
 
     <button onclick="procesarLoginFormulario()" style="width: 100%; background: #3b82f6; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 15px; transition: background 0.2s;">
       Ingresar al Sistema
+// Detectar la tecla Enter en el campo de contraseña
+document.getElementById('login-pass').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        procesarLoginFormulario();
+    }
+});
     </button>
     
   </div>
