@@ -10,10 +10,15 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks
+from database import init_db # Importamos la función desde tu archivo nuevo
 import os
 import pandas as pd
 
 app = FastAPI()
+# Configuramos el evento de inicio (startup)
+@app.on_event("startup")
+def on_startup():
+    init_db()  # Esto crea las tablas automáticamente al encender el servidor
 
 # ═════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE CORS: PERMITE QUE TU HTML SE CONECTE CON PYTHON
