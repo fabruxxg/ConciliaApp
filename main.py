@@ -190,6 +190,8 @@ EMPRESAS_DB = {
 @app.post("/v1/auth/login")
 @app.post("/v1/auth/login")
 def login(formulario_data: dict = None, session: Session = Depends(get_session)):
+    if formulario_data is None:
+        return {"error": "El servidor no recibió ningún dato"}
     
     # 1. Si los datos llegan vacíos desde JavaScript
     if not formulario_data:
