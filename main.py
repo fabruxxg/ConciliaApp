@@ -208,7 +208,10 @@ def login(request: Request, session: Session = Depends(get_session)):
         
     except Exception as e:
         print(f"ERROR CRÍTICO: {e}")
-        return {"status": "error", "message": "Error interno del servidor"}    return {"status": "success", "message": "¡Bienvenido!"}@app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
+        return {"status": "error", "message": "Error interno del servidor"}
+        
+    return {"status": "success", "message": "¡Bienvenido!"}
+("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
 async def process_reconciliation(
     background_tasks: BackgroundTasks,
     file_mayor: UploadFile = File(...),
