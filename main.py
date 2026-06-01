@@ -188,30 +188,48 @@ EMPRESAS_DB = {
 }
 
 @app.post("/v1/auth/login")
-def login(request: Request, session: Session = Depends(get_session)):
-    # Usamos request.json() para evitar errores si el diccionario llega mal
-    try:
-        data = request.json()
-        email = data.get("email")
-        password = data.get("password")
+@app.post("/v1/auth/login")
+def login(formulario_data: dict = None, session: Session = Depends(get_session)):
+    if formulario_data is None:
+        return {"error": "El servidor no recibió ningún dato"}
+    
+    # 1. Si los datos llegan vacíos desde JavaScript
+    if not formulario_data:
+        raise HTTPException(
+            status_code=401, 
+            detail="ERRORfrontend: El servidor recibió un formulario totalmente VACÍO."
+        )
+    
+    email_recibido = formulario_data.get("email") or formulario_data.get("username")
+    password_recibida = formulario_data.get("password")
+    
+    # 2. Si JavaScript envió datos, pero con nombres incorrectos
+    if not email_recibido:
+        llaves_enviadas = list(formulario_data.keys())
+        raise HTTPException(
+            status_code=401, 
+            detail=f"ERRORfrontend: No enviaste ni 'email' ni 'username'. Enviaste estos campos: {llaves_enviadas}"
+        )
         
-        if not email or not password:
-            return {"status": "error", "message": "Datos incompletos"}
-
-        statement = select(User).where(User.email == email)
-        usuario = session.exec(statement).first()
-
-        if not usuario or not usuario.verify_password(password):
-            return {"status": "error", "message": "Credenciales inválidas"}
-
-        return {"status": "success", "message": "Login exitoso"}
+    # 3. Buscar en la Base de Datos
+    statement = select(User).where(User.email == email_recibido)
+    usuario = session.exec(statement).first()
+    
+    # 4. Si el correo no existe en Railway
+    if not usuario:
+        raise HTTPException(
+            status_code=401, 
+            detail=f"ERROR_BASE_DATOS: El correo '{email_recibido}' NO existe registrado en PostgreSQL."
+        )
         
-    except Exception as e:
-        print(f"ERROR CRÍTICO: {e}")
-        return {"status": "error", "message": "Error interno del servidor"}
+    # 5. Si el correo existe pero la contraseña está mal
+    if not usuario.verify_password(password_recibida):
+        raise HTTPException(
+            status_code=401, 
+            detail="ERROR_PASSWORD: El usuario existe, pero la CONTRASEÑA es incorrecta."
+        )
         
-    return {"status": "success", "message": "¡Bienvenido!"}
-("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
+    return {"status": "success", "message": "¡Bienvenido!"}@app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
 async def process_reconciliation(
     background_tasks: BackgroundTasks,
     file_mayor: UploadFile = File(...),
