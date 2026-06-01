@@ -24,11 +24,11 @@ def on_startup():
     
     # Creamos el usuario administrador inicial si no existe
     with Session(engine) as session:
-        statement = select(User).where(User.email == "auditor@retail.com.py")
+        statement = select(User).where(User.email == "fabrigaoli@gmail.com.py")
         usuario_existente = session.exec(statement).first()
         
         if not usuario_existente:
-            admin = User(email="Fabrizio Galeano")
+            admin = User(email="fabrigaoli@gmail.com.py")
             admin.set_password("Fg200472") # Se guarda encriptada
             session.add(admin)
             session.commit()
