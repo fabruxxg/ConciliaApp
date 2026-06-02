@@ -619,6 +619,51 @@ tbody tr.has-diff td{background:var(--amberb);}
 .modal-title span.icon { color: var(--primary); }
 .modal-text { font-size: 14px; color: var(--tx2); line-height: 1.6; margin-bottom: 2rem; }
 .modal-buttons { display: flex; justify-content: flex-end; gap: 12px; }
+/* ══ EFECTOS 3D Y ANIMACIÓN PARA PANTALLA DE LOGIN ══ */
+.login-glass-card {
+  background: rgba(30, 18, 12, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(249, 115, 22, 0.35); /* Borde naranja brillante */
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.05);
+  border-radius: 24px;
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  transform: perspective(1000px) rotateX(0deg) translateY(0);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+.login-glass-card:hover {
+  transform: perspective(1000px) rotateX(2deg) translateY(-5px);
+  box-shadow: 0 35px 60px -15px rgba(249, 115, 22, 0.25);
+}
+.login-btn-3d {
+  width: 100%;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); /* Naranja corporativo */
+  color: white;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 25px -6px rgba(249, 115, 22, 0.5);
+  transition: all 0.3s ease;
+}
+.login-btn-3d:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 30px -8px rgba(249, 115, 22, 0.7);
+}
+
+/* 🌟 ANIMACIÓN DE INMERSIÓN AL ENTRAR AL SISTEMA */
+.login-exit-animation {
+  animation: inmersiones3D 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none; 
+}
+@keyframes inmersiones3D {
+  0% { opacity: 1; transform: scale(1); filter: blur(0px); }
+  100% { opacity: 0; transform: scale(1.15) translateY(-20px); filter: blur(10px); visibility: hidden; }
+}
 </style>
 </head>
 <body>
@@ -627,36 +672,35 @@ tbody tr.has-diff td{background:var(--amberb);}
 <canvas id="webgl-canvas"></canvas>
 <div class="ambient-glow"></div>
 
-<div class="shell"><div id="login-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #0f172a; z-index: 99999; display: flex; align-items: center; justify-content: center; font-family: sans-serif;">
-  <div style="background: #1e293b; padding: 40px; border-radius: 16px; border: 1px solid #334155; width: 100%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center;">
-    
-    <div style="font-size: 28px; font-weight: bold; color: #f8fafc; margin-bottom: 8px; letter-spacing: -0.5px;">
-      Concilia<span style="color: #3b82f6;">App</span>
+<div id="login-overlay" style="position: fixed; inset: 0; background: rgba(19, 10, 5, 0.85); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;">
+  
+  <div class="login-glass-card">
+    <div style="font-size: 32px; font-weight: 800; color: #fefbf9; margin-bottom: 8px; letter-spacing: -0.5px;">
+      Concilia<span style="color: #f97316;">App</span>
     </div>
-    <div style="font-size: 14px; color: #94a3b8; margin-bottom: 32px;">
-      Sistema Avanzado de Auditoría Contable
+    <div style="font-size: 14px; color: #cbb8ae; margin-bottom: 32px; font-weight: 500;">
+      Motor de Inteligencia Financiera
     </div>
 
-    <div id="login-error-msg" style="display: none; background: #ef444415; border: 1px solid #ef4444; color: #f87171; font-size: 13px; padding: 10px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+    <div id="login-error-msg" style="display: none; background: rgba(244, 63, 94, 0.1); border: 1px solid #f43f5e; color: #f43f5e; font-size: 13px; padding: 10px; border-radius: 8px; margin-bottom: 20px; text-align: left; font-weight: 600;">
       ⚠ Credenciales inválidas. Intente de nuevo.
     </div>
 
-<form id="login-form">
-    <div style="text-align: left; margin-bottom: 20px;">
-        <label>Correo Corporativo</label>
-        <input type="email" id="login-email" autocomplete="off" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff;">
-    </div>
+    <form id="login-form">
+        <div style="text-align: left; margin-bottom: 20px;">
+            <label style="color: #f3eae3; font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Correo Corporativo</label>
+            <input type="email" id="login-email" autocomplete="off" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(249, 115, 22, 0.3); padding: 12px; border-radius: 10px; color: #fff; outline: none; transition: border 0.3s;" onfocus="this.style.borderColor='#f97316'" onblur="this.style.borderColor='rgba(249, 115, 22, 0.3)'">
+        </div>
 
-    <div style="text-align: left; margin-bottom: 30px;">
-        <label>Contraseña</label>
-        <input type="password" id="login-pass" autocomplete="new-password" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff;">
-    </div>
+        <div style="text-align: left; margin-bottom: 30px;">
+            <label style="color: #f3eae3; font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Contraseña</label>
+            <input type="password" id="login-pass" autocomplete="new-password" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(249, 115, 22, 0.3); padding: 12px; border-radius: 10px; color: #fff; outline: none; transition: border 0.3s;" onfocus="this.style.borderColor='#f97316'" onblur="this.style.borderColor='rgba(249, 115, 22, 0.3)'">
+        </div>
 
-    <button type="submit" style="width: 100%; background: #3b82f6; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
-        Ingresar al Sistema
-    </button>
-</form>
-
+        <button type="submit" class="login-btn-3d">
+            Ingresar al Sistema
+        </button>
+    </form>
 <script>
 async function procesarLoginFormulario(event) {
     event.preventDefault(); // Evita que la página se recargue al instante
@@ -681,28 +725,32 @@ async function procesarLoginFormulario(event) {
 
         const data = await res.json();
         
-       // Si Python nos responde con el token, activamos el sistema
+        // Si Python nos responde con el token, activamos el sistema
         if (data.access_token) {
             BACKEND_TOKEN = data.access_token;
             EMPRESA_CONECTADA = data.empresa;
             
-            // 🌟 Leemos el nombre dinámico que nos mandó Python
+            // Leemos el nombre dinámico que nos mandó Python
             const nombreDinamico = data.usuario_nombre || "Usuario";
-            
             if (typeof showToast === 'function') {
-                // ¡Lanzamos la ventanita con el saludo personalizado!
                 showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
             }
             
-            // Ocultamos la pantalla de login y revelamos el Dashboard
-            document.getElementById('login-overlay').style.display = 'none';
+            // 🌟 MAGIA 3D: Aplicamos la clase de animación en vez de ocultar de golpe
+            const overlay = document.getElementById('login-overlay');
+            overlay.classList.add('login-exit-animation');
+            
+            // Esperamos 800 milisegundos (lo que dura la animación) para borrarlo del todo
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 800);
         }
     } catch (err) {
         errorMsg.style.display = 'block';
     }
 }
 
-// Vinculamos el formulario directamente a la función limpia
+// Vinculamos el formulario directamente a la función
 document.getElementById('login-form').addEventListener('submit', procesarLoginFormulario);
 </script>
   </div>
@@ -2569,6 +2617,5 @@ function ejecutarSimulacionLocal(setP) {
 
 // Autenticación inicial automática al abrir el dashboard
 </script>
- </script>
 </body>
 </html>
