@@ -642,15 +642,14 @@ tbody tr.has-diff td{background:var(--amberb);}
     </div>
 
 <form id="login-form">
-    
     <div style="text-align: left; margin-bottom: 20px;">
         <label>Correo Corporativo</label>
-        <input type="email" id="login-email" value="auditor@retail.com.py" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff;">
+        <input type="email" id="login-email" autocomplete="off" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff;">
     </div>
 
     <div style="text-align: left; margin-bottom: 30px;">
         <label>Contraseña</label>
-        <input type="password" id="login-pass" value="Fg200472" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff;">
+        <input type="password" id="login-pass" autocomplete="new-password" style="width: 100%; background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; color: #fff;">
     </div>
 
     <button type="submit" style="width: 100%; background: #3b82f6; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
@@ -659,10 +658,48 @@ tbody tr.has-diff td{background:var(--amberb);}
 </form>
 
 <script>
-    document.getElementById('login-form').addEventListener('submit', function(event) {
-        event.preventDefault(); // Evita que la página se recargue
-        procesarLoginFormulario(); // Llama a tu función que debe tener el fetch corregido
-    });
+async function procesarLoginFormulario(event) {
+    event.preventDefault(); // Evita que la página se recargue al instante
+
+    const email = document.getElementById('login-email').value;
+    const pass = document.getElementById('login-pass').value;
+    const errorMsg = document.getElementById('login-error-msg');
+    
+    errorMsg.style.display = 'none';
+
+    try {
+        // Enviar la petición a Railway
+        const res = await fetch("https://conciliaapp-production.up.railway.app/v1/auth/login", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: email, password: pass })
+        });
+
+        if (!res.ok) {
+            throw new Error("Credenciales inválidas");
+        }
+
+        const data = await res.json();
+        
+        // Si Python nos responde con el token, activamos el sistema
+        if (data.access_token) {
+            BACKEND_TOKEN = data.access_token;
+            EMPRESA_CONECTADA = data.empresa;
+            
+            if (typeof showToast === 'function') {
+                showToast(`¡Bienvenido, ${EMPRESA_CONECTADA}!`);
+            }
+            
+            // Ocultamos la pantalla de login y revelamos el Dashboard
+            document.getElementById('login-overlay').style.display = 'none';
+        }
+    } catch (err) {
+        errorMsg.style.display = 'block';
+    }
+}
+
+// Vinculamos el formulario directamente a la función limpia
+document.getElementById('login-form').addEventListener('submit', procesarLoginFormulario);
 </script>
   </div>
 </div>
@@ -2374,94 +2411,6 @@ renderBancardHist();
 const BACKEND_URL = "http://127.0.0.1:8000/v1";
 let BACKEND_TOKEN = null;
 let EMPRESA_CONECTADA = null;
-
-
-// ... (Aquí arriba puede estar tu función runConcil u otras variables) ...
-
-// ═════════════════════════════════════════════════════════════════════
-// FUNCIÓN DE LOGIN (ASEGÚRATE DE QUE ESTÉ AQUÍ ADENTRO DE LAS ETIQUETAS SCRIPT)
-// ═════════════════════════════════════════════════════════════════════
-async function procesarLoginFormulario() {
-  const email = document.getElementById('login-email').value;
-  const pass = document.getElementById('login-pass').value;
-  const errorMsg = document.getElementById('login-error-msg');
-  
-  errorMsg.style.display = 'none';
-async function procesarLoginFormulario(event) {
-    if (event) event.preventDefault(); // Evita que la página se recargue
-
-    // 1. Aquí capturas tus datos (asegúrate de que los IDs sean los correctos)
-    const datos = {
-        email: document.getElementById("auditor@retail.com.py").value, 
-        password: document.getElementById("Fg200472").value
-    };
-
-    try {
-        // 2. Hacemos la petición a Railway
-        const response = await fetch("https://conciliaapp-production.up.railway.app/v1/auth/login", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(datos)
-        });
-
-        // 3. Convertimos la respuesta del servidor a un objeto legible
-        const data = await response.json();
-
-        // 4. SI EL SERVIDOR DEVUELVE ERROR (Como el 401)
-        if (!response.ok) {
-            // 🌟 ¡ESTA LÍNEA ES LA MAGIA! 
-            // Te va a gritar en la consola el motivo exacto que pusimos en Python
-            console.error("❌ EL BACKEND RECHAZÓ EL LOGIN PORQUE:", data.detail);
-            
-            // También te lo mostrará en una ventana flotante en tu pantalla para que no te lo pierdas
-            alert("Error al iniciar sesión: " + data.detail);
-            return;
-        }
-
-        // 5. Si todo está bien, continúa tu flujo normal
-        console.log("¡Logueado con éxito!", data);
-        alert("¡Bienvenido!");
-        // window.location.href = "/dashboard.html"; // o tu redirección
-
-    } catch (error) {
-        console.error("Hubo un error de conexión con el servidor:", error);
-    }
-}
-
-  try {
-    const res = await fetch("/v1/auth/login", {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: email, password: pass })
-    });
-
-    if (!res.ok) {
-      throw new Error("Acceso denegado");
-    }
-
-    const data = await res.json();
-    
-    if (data.access_token) {
-      BACKEND_TOKEN = data.access_token;
-      EMPRESA_CONECTADA = data.empresa;
-      
-      // Muestra el cartel de bienvenida de tu plantilla
-      if (typeof showToast === 'function') {
-        showToast(`¡Bienvenido, ${EMPRESA_CONECTADA}!`);
-      }
-      
-      // Hace desaparecer la pantalla de login para mostrar el Dashboard
-      document.getElementById('login-overlay').style.display = 'none';
-    }
-  } catch (err) {
-    // Si falla, muestra el mensaje de error en rojo
-    errorMsg.style.display = 'block';
-  }
-}
-
-// Nota: Elimina cualquier línea que diga "setTimeout(autenticarApp, 1000);" al fondo del archivo. 
 // Ahora el login solo ocurrirá cuando se presione el botón azul.
 // ESTA ES TU FUNCIÓN ORIGINAL MODIFICADA PARA TRABAJAR CON DATOS REALES DE PYTHON
 async function runConcil(){
