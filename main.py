@@ -2,7 +2,7 @@ import io
 import uuid
 import jwt
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import Dict, Any
 import pandas as pd
 from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -216,99 +216,40 @@ def login(formulario_data: dict = None, session: Session = Depends(get_session))
 # ═════════════════════════════════════════════════════════════════════
 # 4. ENDPOINTS CORE DE CONCILIACIÓN
 # ═════════════════════════════════════════════════════════════════════
-@app.post("/v1/reconciliations/process")
-async def procesar_conciliacion(
+@app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
+async def process_reconciliation(
     background_tasks: BackgroundTasks,
     file_mayor: UploadFile = File(...),
-    files_gateway: List[UploadFile] = File(...),  # <-- CAMBIADO: Ahora acepta la lista de tus extractos
-    processor: str = Form("bancard"),
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    file_gateway: UploadFile = File(...),
+    processor: str = Form(...),
+    tenant: dict = Depends(get_current_tenant)
 ):
-    """
-    Recibe el Libro Mayor y múltiples extractos binarios de la pasarela.
-    Consolida los extractos en una única matriz agregada por fechas y lanza el análisis matemático.
-    """
-    try:
-        # 1. Leer el Libro Mayor de forma convencional
-        bytes_mayor = await file_mayor.read()
-        df_mayor = pd.read_excel(io.BytesIO(bytes_mayor))
-        
-        # 2. Leer y CONSOLIDAR de forma dinámica los N extractos del mes
-        listado_dfs_extractos = []
-        for file_extracto in files_gateway:
-            bytes_extracto = await file_extracto.read()
-            # Leemos cada Excel individualmente y lo agregamos a la colección
-            df_individual = pd.read_excel(io.BytesIO(bytes_extracto))
-            listado_dfs_extractos.append(df_individual)
-            
-        # Unificamos verticalmente todos los extractos subidos en una sola gran matriz de Pandas
-        df_gateway_completo = pd.concat(listado_dfs_extractos, ignore_index=True)
-        
-        # ═════════════════════════════════════════════════════════════════════
-        # NÚCLEO DE CONSOLIDACIÓN FINANCIERA AUTOMÁTICA
-        # ═════════════════════════════════════════════════════════════════════
-        # Homologamos la columna 'Fecha' para asegurar que agrupe de forma idéntica sin horas que estorben
-        df_gateway_completo['fecha_limpia'] = pd.to_datetime(df_gateway_completo['Fecha']).dt.date
-        
-        # Agrupamos por cada fecha única del mes y SUMAMOS los montos que coincidan
-        # IMPORTANTE: Asegúrate de que las columnas de tus extractos se llamen exactamente 'Fecha' y 'Monto'
-        df_gateway_consolidado = df_gateway_completo.groupby('fecha_limpia', as_index=False)['Monto'].sum()
-        
-        # Renombramos temporalmente para mantener la compatibilidad con el resto de tu algoritmo matemático
-        df_gateway_consolidado = df_gateway_consolidado.rename(columns={'fecha_limpia': 'Fecha'})
-        
-        # 3. Lanzar el Cruce Analítico en Background Tasks
-        # A partir de aquí tu flujo sigue igual, pero en lugar de pasarle un único extracto,
-        # le pasas tu matriz unificada y consolidada 'df_gateway_consolidado'
-        task_id = str(uuid.uuid4())
-        
-        # Creamos el estado inicial en tu diccionario global de tareas activas
-        TASKS_REGISTRY[task_id] = {
-            "status": "processing",
-            "progress_percentage": 20,
-            "results": None
-        }
-        
-        # Ejecutamos el Worker matemático asíncrono pasándole la data consolidada
-        background_tasks.add_task(
-            ejecutar_auditoria_worker, 
-            task_id, 
-            df_mayor, 
-            df_gateway_consolidated, # <-- El cruce se ejecutará contra los montos ya sumados
-            processor
-        )
-        
-        return {
-            "status": "queued",
-            "task_id": task_id,
-            "message": f"✓ {len(files_gateway)} extractos consolidados y unificados por fecha de manera exitosa."
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fallo crítico en la consolidación de matrices binarias: {str(e)}"
-        )        
-        # ═════════════════════════════════════════════════════════════════════
-        # AGRUPACIÓN Y SUMA POR COINCIDENCIA DE FECHAS
-        # ═════════════════════════════════════════════════════════════════════
-        # Estandarizamos el campo Fecha para que agrupe correctamente
-        df_gateway_completo['fecha_limpia'] = pd.to_datetime(df_gateway_completo['Fecha']).dt.date
-        
-        # Agrupamos por fecha única y sumamos el monto automáticamente
-        df_gateway_consolidado = df_gateway_completo.groupby('fecha_limpia', as_index=False)['Monto'].sum()
-        
-        # [Aquí continúa tu lógica de cruce de Pandas (merge/cruce) usando df_gateway_consolidado contra df_mayor]
-        
-        task_id = str(uuid.uuid4())
-        return {
-            "status": "queued",
-            "task_id": task_id,
-            "message": f"Consolidados exitosamente {len(files_gateway)} extractos sin alterar el flujo visual."
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en consolidación: {str(e)}")
+    task_id = f"task_{uuid.uuid4().hex[:8]}"
+    
+    TASKS_DB[task_id] = {
+        "company_id": tenant["company_id"],
+        "status": "pending",
+        "progress": 0,
+        "processor": processor,
+        "created_at": datetime.now().isoformat()
+    }
+    
+    mayor_bytes = await file_mayor.read()
+    gateway_bytes = await file_gateway.read()
+    
+    background_tasks.add_task(
+        core_reconciliation_worker, 
+        task_id, 
+        mayor_bytes, 
+        gateway_bytes, 
+        tenant["company_id"]
+    )
+    
+    return {
+        "task_id": task_id,
+        "status": "pending",
+        "message": f"Archivos para {processor.upper()} recibidos. Procesamiento en cola."
+    }
 
 
 @app.get("/v1/reconciliations/tasks/{task_id}", tags=["Conciliador"])
