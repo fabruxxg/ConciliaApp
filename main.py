@@ -1,24 +1,21 @@
 import io
 import uuid
 import jwt
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any
 import pandas as pd
-from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks
 from database import init_db, engine, get_session
 from models import User
-from fastapi import FastAPI, Depends, HTTPException, status
 from sqlmodel import Session, select
-from fastapi.responses import HTMLResponse
 import os
-import pandas as pd
 
 app = FastAPI()
+
 @app.on_event("startup")
 def on_startup():
     init_db() # Crea las tablas en PostgreSQL si no existen
@@ -27,37 +24,37 @@ def on_startup():
         # ═════════════════════════════════════════════════════════════════════
         # CONFIGURA AQUÍ LOS USUARIOS QUE DESEAS EN TU SISTEMA
         # ═════════════════════════════════════════════════════════════════════
-        # Puedes cambiar los correos de abajo por los que tú quieras.
-        # Todos se crearán inicialmente con la contraseña: Fg200472
+        # Puedes cambiar o añadir aquí todos los correos que quieras.
+        # Todos se crearán con la contraseña por defecto: Fg200472
         # ═════════════════════════════════════════════════════════════════════
         usuarios_a_crear = [
-            "fabrigaoli@gmail.com",   # <-- ¡Pon aquí tu correo principal!
-            "prueba1@gmail.com",             # <-- Segundo usuario de prueba
-            "prueba2@gmail.com"              # <-- Tercer usuario de prueba
+            "fabrigaoli@gmail.com.py",
+            "tu-correo-personal@retail.com.py",   # <-- ¡Cambia este por el tuyo!
+            "auditor@retail.com.py",
+            "gerencia@retail.com.py"
         ]
         
         for email_usuario in usuarios_a_crear:
-            # Verificamos si este usuario ya existe en PostgreSQL para no duplicarlo
             statement = select(User).where(User.email == email_usuario)
             usuario_existente = session.exec(statement).first()
             
             if not usuario_existente:
                 nuevo_usuario = User(email=email_usuario)
-                nuevo_usuario.set_password("Fg200472") # Contraseña inicial segura encriptada
+                nuevo_usuario.set_password("Fg200472") 
                 session.add(nuevo_usuario)
-                print(f"¡Usuario {email_usuario} creado con éxito en PostgreSQL!")
+                print(f"¡Usuario {email_usuario} creado con éxito!")
         
-        # Guardamos todos los nuevos usuarios en la base de datos de Railway
-        session.commit()#
- ═════════════════════════════════════════════════════════════════════
+        session.commit()
+
+# ═════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE CORS: PERMITE QUE TU HTML SE CONECTE CON PYTHON
 # ═════════════════════════════════════════════════════════════════════
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite que cualquier archivo HTML local se conecte
+    allow_origins=["*"],  
     allow_credentials=True,
-    allow_methods=["*"],  # Permite enviar POST, GET, etc.
-    allow_headers=["*"],  # Permite enviar archivos y tokens de seguridad
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
 
 # Configuración de Seguridad (JWT)
@@ -65,18 +62,12 @@ SECRET_KEY = "CONCILIA_APP_SUPER_SECRET_KEY_2026"
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="v1/auth/login")
 
-# Base de datos en memoria para simular el estado de las tareas asíncronas
-# En producción, esto se almacena en PostgreSQL y Redis
 TASKS_DB: Dict[str, Dict[str, Any]] = {}
 
 # ═════════════════════════════════════════════════════════════════════
 # 1. DEPENDENCIA DE SEGURIDAD (MULTI-TENANCY)
 # ═════════════════════════════════════════════════════════════════════
 async def get_current_tenant(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
-    """
-    Intercepta el JWT Token, lo valida y extrae los datos de la empresa (Tenant).
-    Si el token es inválido o expiró, corta la petición inmediatamente.
-    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Credenciales de acceso inválidas o expiradas.",
@@ -99,50 +90,29 @@ async def get_current_tenant(token: str = Depends(oauth2_scheme)) -> Dict[str, A
 # ═════════════════════════════════════════════════════════════════════
 # 2. MOTOR DE CONCILIACIÓN EN SEGUNDO PLANO (PANDAS)
 # ═════════════════════════════════════════════════════════════════════
-def core_reconciliation_worker(
-    task_id: str, 
-    mayor_bytes: bytes, 
-    gateway_bytes: bytes, 
-    company_id: int
-):
-    """
-    Trabajador asíncrono. Ejecuta el cruce de datos matemático a alta velocidad
-    usando dataframes de Pandas sin bloquear el tráfico de la API.
-    """
+def core_reconciliation_worker(task_id: str, mayor_bytes: bytes, gateway_bytes: bytes, company_id: int):
     try:
         TASKS_DB[task_id]["status"] = "processing"
         TASKS_DB[task_id]["progress"] = 20
 
-        # 1. Leer los archivos binarios directamente a memoria (Soporta Excel y CSV)
         df_mayor = pd.read_excel(io.BytesIO(mayor_bytes))
         df_gateway = pd.read_excel(io.BytesIO(gateway_bytes))
         
         TASKS_DB[task_id]["progress"] = 50
 
-        # Estandarizar nombres de columnas a minúsculas para evitar errores humanos
         df_mayor.columns = [c.lower().strip() for c in df_mayor.columns]
         df_gateway.columns = [c.lower().strip() for c in df_gateway.columns]
 
-        # 2. EL CRUCE MAESTRO (OUTER JOIN por Nro de Comprobante / Referencia)
-        # Asumimos que los archivos tienen una columna 'referencia' o 'comprobante'
         join_key = 'referencia' if 'referencia' in df_mayor.columns else 'comprobante'
         
-        df_cruce = pd.merge(
-            df_mayor, 
-            df_gateway, 
-            on=join_key, 
-            how='outer', 
-            suffixes=('_mayor', '_gateway')
-        )
+        df_cruce = pd.merge(df_mayor, df_gateway, on=join_key, how='outer', suffixes=('_mayor', '_gateway'))
 
         TASKS_DB[task_id]["progress"] = 80
 
-        # 3. Cálculo de métricas y detección de desvíos en Guaraníes
         df_cruce['monto_mayor'] = df_cruce['monto_mayor'].fillna(0)
         df_cruce['monto_gateway'] = df_cruce['monto_gateway'].fillna(0)
         df_cruce['desvio'] = df_cruce['monto_mayor'] - df_cruce['monto_gateway']
 
-        # Clasificación automática del estado de la transacción
         def categorizar(row):
             if row['monto_mayor'] == 0: return 'FALTANTE_EN_MAYOR'
             if row['monto_gateway'] == 0: return 'FALTANTE_EN_PASARELA'
@@ -151,16 +121,13 @@ def core_reconciliation_worker(
 
         df_cruce['match_status'] = df_cruce.apply(categorizar, axis=1)
 
-        # 4. Consolidación de Macro-Métricas para el Dashboard
         total_mayor = float(df_cruce['monto_mayor'].sum())
         total_gateway = float(df_cruce['monto_gateway'].sum())
         total_desviado = float(df_cruce[df_cruce['match_status'] != 'OK']['desvio'].abs().sum())
         
-        # Filtrar solo las filas que representan problemas (Desvíos o faltantes)
         df_discrepancias = df_cruce[df_cruce['match_status'] != 'OK']
         lista_discrepancias = df_discrepancias[[join_key, 'monto_mayor', 'monto_gateway', 'desvio', 'match_status']].to_dict(orient='records')
 
-        # Guardar el resultado final de la auditoría en nuestro estado
         TASKS_DB[task_id].update({
             "status": "completed",
             "progress": 100,
@@ -174,9 +141,7 @@ def core_reconciliation_worker(
                 "discrepancies": lista_discrepancias
             }
         })
-
     except Exception as e:
-        # Si un archivo viene corrupto o mal mapeado, se captura el error de forma segura
         TASKS_DB[task_id].update({
             "status": "failed",
             "progress": 100,
@@ -185,31 +150,49 @@ def core_reconciliation_worker(
 
 
 # ═════════════════════════════════════════════════════════════════════
-# 3. ENDPOINTS DE LA API REST
-# ═════════════════════════════════════════════════════════════════════
-
-# ═════════════════════════════════════════════════════════════════════
-# ESTRUCTURA Y BASE DE DATOS PARA INICIO DE SESIÓN
-# ═════════════════════════════════════════════════════════════════════
-# ═════════════════════════════════════════════════════════════════════
-# ESTRUCTURA Y RUTAS PARA INICIO DE SESIÓN
+# 3. ENDPOINT DE AUTENTICACIÓN (LOGIN)
 # ═════════════════════════════════════════════════════════════════════
 class LoginRequest(BaseModel):
     username: str
     password: str
 
 @app.post("/v1/auth/login")
-def login(request: LoginRequest, session: Session = Depends(get_session)):
-    # 1. Buscar el usuario en PostgreSQL de Railway
-    statement = select(User).where(User.email == request.username)
+def login(formulario_data: dict = None, session: Session = Depends(get_session)):
+    if formulario_data is None:
+        return {"error": "El servidor no recibió ningún dato"}
+    
+    if not formulario_data:
+        raise HTTPException(
+            status_code=401, 
+            detail="ERRORfrontend: El servidor recibió un formulario totalmente VACÍO."
+        )
+    
+    email_recibido = formulario_data.get("email") or formulario_data.get("username")
+    password_recibida = formulario_data.get("password")
+    
+    if not email_recibido:
+        llaves_enviadas = list(formulario_data.keys())
+        raise HTTPException(
+            status_code=401, 
+            detail=f"ERRORfrontend: No enviaste ni 'email' ni 'username'. Enviaste estos campos: {llaves_enviadas}"
+        )
+        
+    statement = select(User).where(User.email == email_recibido)
     usuario = session.exec(statement).first()
     
-    # 2. Verificar si existe y si la contraseña es correcta
-    if not usuario or not usuario.verify_password(request.password):
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    if not usuario:
+        raise HTTPException(
+            status_code=401, 
+            detail=f"ERROR_BASE_DATOS: El correo '{email_recibido}' NO existe registrado en PostgreSQL."
+        )
         
-  # 3. Generar el Token de Seguridad
-    from datetime import timedelta
+    if not usuario.verify_password(password_recibida):
+        raise HTTPException(
+            status_code=401, 
+            detail="ERROR_PASSWORD: El usuario existe, pero la CONTRASEÑA es incorrecta."
+        )
+
+    # 🌟 GENERACIÓN DEL TOKEN JWT REQUERIDO PARA SEGUIR OPERANDO LA APP
     payload = {
         "company_id": 101, 
         "user_id": usuario.id, 
@@ -218,17 +201,21 @@ def login(request: LoginRequest, session: Session = Depends(get_session)):
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     
-    # 🌟 MAGIA AQUÍ: Extraemos el texto antes del '@' y ponemos la primera letra en mayúscula
-    # Ejemplo: "juan.perez@empresa.com" -> "Juan.perez"
+    # 🌟 EXTRAEMOS EL NOMBRE ANTES DEL '@' PARA EL SALUDO DINÁMICO
     nombre_personalizado = usuario.email.split("@")[0].capitalize()
-    
-    # 4. Abrirle la puerta al usuario y enviarle su nombre real
+        
     return {
+        "status": "success", 
+        "message": "¡Bienvenido!",
         "access_token": token,
-        "usuario_nombre": nombre_personalizado, # <-- ¡Enviamos el nombre al frontend!
-        "empresa": "Central shop"
+        "usuario_nombre": nombre_personalizado,
+        "empresa": "Retail S.A."
     }
 
+
+# ═════════════════════════════════════════════════════════════════════
+# 4. ENDPOINTS CORE DE CONCILIACIÓN
+# ═════════════════════════════════════════════════════════════════════
 @app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
 async def process_reconciliation(
     background_tasks: BackgroundTasks,
@@ -237,13 +224,8 @@ async def process_reconciliation(
     processor: str = Form(...),
     tenant: dict = Depends(get_current_tenant)
 ):
-    """
-    Endpoint Core: Recibe los archivos financieros, inyecta de forma transparente
-    el company_id del cliente y dispara el motor matemático asíncronamente.
-    """
     task_id = f"task_{uuid.uuid4().hex[:8]}"
     
-    # Inicializamos la estructura de la tarea
     TASKS_DB[task_id] = {
         "company_id": tenant["company_id"],
         "status": "pending",
@@ -252,11 +234,9 @@ async def process_reconciliation(
         "created_at": datetime.now().isoformat()
     }
     
-    # Leemos los archivos en memoria antes de pasarlos al hilo secundario
     mayor_bytes = await file_mayor.read()
     gateway_bytes = await file_gateway.read()
     
-    # Se añade la tarea pesada al pool de hilos de FastAPI de forma no bloqueante
     background_tasks.add_task(
         core_reconciliation_worker, 
         task_id, 
@@ -274,15 +254,10 @@ async def process_reconciliation(
 
 @app.get("/v1/reconciliations/tasks/{task_id}", tags=["Conciliador"])
 async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenant)):
-    """
-    Endpoint de monitoreo (Polling). Permite al frontend consultar el estado
-    de la conciliación y pintar la barra de carga en tiempo real.
-    """
     task = TASKS_DB.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="La tarea solicitada no existe.")
         
-    # CONTROL CRÍTICO MULTI-TENANT: La empresa A no puede consultar tareas de la empresa B
     if task["company_id"] != tenant["company_id"]:
         raise HTTPException(status_code=403, detail="No autorizado para ver este recurso.")
         
@@ -291,33 +266,33 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
         "status": task["status"],
         "progress_percentage": task["progress"],
         "results": task.get("results") if task["status"] == "completed" else None,
-        "error": task.get("error") if task["status"] == "failed" else None
+        "error": task.get("error") if task["failed"] == "failed" else None
     }
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 5. ENDPOINTS COMPLEMENTARIOS Y SERVIDOR DE VISTAS
+# ═════════════════════════════════════════════════════════════════════
 @app.get("/verificar-base-datos-secreta")
 def verificar_db(session: Session = Depends(get_session)):
-    # 1. Traer todos los usuarios que existen actualmente en tu PostgreSQL de Railway
     todos_los_usuarios = session.exec(select(User)).all()
     lista_emails = [u.email for u in todos_los_usuarios]
     
-    # 2. Buscar específicamente al administrador
     statement = select(User).where(User.email == "auditor@retail.com.py")
     admin = session.exec(statement).first()
     
     estado = ""
     if admin:
-        # Si ya existe, le obligamos a tener la contraseña correcta por si acaso
         admin.set_password("Fg200472")
         session.add(admin)
         session.commit()
         estado = "El usuario ya existía. Acabo de REINICIAR su contraseña a: Fg200472"
     else:
-        # Si no existe, lo creamos desde cero aquí mismo
         nuevo_admin = User(email="auditor@retail.com.py")
         nuevo_admin.set_password("Fg200472")
         session.add(nuevo_admin)
         session.commit()
         estado = "El usuario NO existía. Lo acabo de CREAR desde cero con la contraseña: Fg200472"
-        # Actualizamos la lista para mostrarlo
         lista_emails.append("auditor@retail.com.py")
         
     return {
@@ -325,19 +300,11 @@ def verificar_db(session: Session = Depends(get_session)):
         "resultado_de_la_operacion": estado,
         "instrucciones": "Intenta loguearte ahora con el email 'auditor@retail.com.py' y la contraseña 'Fg200472'"
     }
-from fastapi.responses import HTMLResponse  # <-- Asegúrate de que esta línea esté arriba con tus otros imports
-import os
 
-# ... (Todo tu código existente de FastAPI, CORS, Procesamiento, etc.) ...
 
-# ═════════════════════════════════════════════════════════════════════
-# RUTA PARA SERVIR EL DASHBOARD COMO UNA WEB REAL
-# ═════════════════════════════════════════════════════════════════════
 @app.get("/", response_class=HTMLResponse)
 async def servir_dashboard():
-    # Cambia "ConciliaAppXX.html" por el nombre exacto de tu archivo si es diferente
     nombre_archivo = "ConciliaAppXX.html" 
-    
     ruta_completa = os.path.join(os.path.dirname(__file__), nombre_archivo)
     
     try:
