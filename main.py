@@ -48,7 +48,8 @@ def on_startup():
                 print(f"¡Usuario {email_usuario} creado con éxito en PostgreSQL!")
         
         # Guardamos todos los nuevos usuarios en la base de datos de Railway
-        session.commit()# ═════════════════════════════════════════════════════════════════════
+        session.commit()#
+ ═════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE CORS: PERMITE QUE TU HTML SE CONECTE CON PYTHON
 # ═════════════════════════════════════════════════════════════════════
 app.add_middleware(
@@ -207,7 +208,7 @@ def login(request: LoginRequest, session: Session = Depends(get_session)):
     if not usuario or not usuario.verify_password(request.password):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
         
-    # 3. Generar el Token de Seguridad (Pase de entrada) que el frontend espera
+  # 3. Generar el Token de Seguridad
     from datetime import timedelta
     payload = {
         "company_id": 101, 
@@ -217,10 +218,15 @@ def login(request: LoginRequest, session: Session = Depends(get_session)):
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     
-    # 4. Abrirle la puerta al usuario
+    # 🌟 MAGIA AQUÍ: Extraemos el texto antes del '@' y ponemos la primera letra en mayúscula
+    # Ejemplo: "juan.perez@empresa.com" -> "Juan.perez"
+    nombre_personalizado = usuario.email.split("@")[0].capitalize()
+    
+    # 4. Abrirle la puerta al usuario y enviarle su nombre real
     return {
         "access_token": token,
-        "empresa": "Retail S.A."
+        "usuario_nombre": nombre_personalizado, # <-- ¡Enviamos el nombre al frontend!
+        "empresa": "Central shop"
     }
 
 @app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])

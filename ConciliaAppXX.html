@@ -681,13 +681,17 @@ async function procesarLoginFormulario(event) {
 
         const data = await res.json();
         
-        // Si Python nos responde con el token, activamos el sistema
+       // Si Python nos responde con el token, activamos el sistema
         if (data.access_token) {
             BACKEND_TOKEN = data.access_token;
             EMPRESA_CONECTADA = data.empresa;
             
+            // 🌟 Leemos el nombre dinámico que nos mandó Python
+            const nombreDinamico = data.usuario_nombre || "Usuario";
+            
             if (typeof showToast === 'function') {
-                showToast(`¡Bienvenido, ${EMPRESA_CONECTADA}!`);
+                // ¡Lanzamos la ventanita con el saludo personalizado!
+                showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
             }
             
             // Ocultamos la pantalla de login y revelamos el Dashboard
