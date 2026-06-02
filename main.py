@@ -21,20 +21,34 @@ import pandas as pd
 app = FastAPI()
 @app.on_event("startup")
 def on_startup():
-    init_db() # Crea las tablas si no existen
+    init_db() # Crea las tablas en PostgreSQL si no existen
     
-    # Creamos el usuario administrador inicial si no existe
     with Session(engine) as session:
-        statement = select(User).where(User.email == "fabrigaoli@gmail.com.py")
-        usuario_existente = session.exec(statement).first()
+        # ═════════════════════════════════════════════════════════════════════
+        # CONFIGURA AQUÍ LOS USUARIOS QUE DESEAS EN TU SISTEMA
+        # ═════════════════════════════════════════════════════════════════════
+        # Puedes cambiar los correos de abajo por los que tú quieras.
+        # Todos se crearán inicialmente con la contraseña: Fg200472
+        # ═════════════════════════════════════════════════════════════════════
+        usuarios_a_crear = [
+            "fabrigaoli@gmail.com",   # <-- ¡Pon aquí tu correo principal!
+            "prueba1@gmail.com",             # <-- Segundo usuario de prueba
+            "prueba2@gmail.com"              # <-- Tercer usuario de prueba
+        ]
         
-        if not usuario_existente:
-            admin = User(email="fabrigaoli@gmail.com.py")
-            admin.set_password("Fg200472") # Se guarda encriptada
-            session.add(admin)
-            session.commit()
-            print("¡Usuario administrador inicial creado en PostgreSQL!")
-# ═════════════════════════════════════════════════════════════════════
+        for email_usuario in usuarios_a_crear:
+            # Verificamos si este usuario ya existe en PostgreSQL para no duplicarlo
+            statement = select(User).where(User.email == email_usuario)
+            usuario_existente = session.exec(statement).first()
+            
+            if not usuario_existente:
+                nuevo_usuario = User(email=email_usuario)
+                nuevo_usuario.set_password("Fg200472") # Contraseña inicial segura encriptada
+                session.add(nuevo_usuario)
+                print(f"¡Usuario {email_usuario} creado con éxito en PostgreSQL!")
+        
+        # Guardamos todos los nuevos usuarios en la base de datos de Railway
+        session.commit()# ═════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE CORS: PERMITE QUE TU HTML SE CONECTE CON PYTHON
 # ═════════════════════════════════════════════════════════════════════
 app.add_middleware(
