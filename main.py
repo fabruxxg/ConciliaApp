@@ -176,60 +176,40 @@ def core_reconciliation_worker(
 # ═════════════════════════════════════════════════════════════════════
 # ESTRUCTURA Y BASE DE DATOS PARA INICIO DE SESIÓN
 # ═════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════
+# ESTRUCTURA Y RUTAS PARA INICIO DE SESIÓN
+# ═════════════════════════════════════════════════════════════════════
 class LoginRequest(BaseModel):
     username: str
     password: str
 
-# Base de datos simulada en memoria con empresas de Paraguay
-EMPRESAS_DB = {
-    "auditor@retail.com.py": {"password": "Retail2026!", "tenant_id": 101, "nombre": "Retail S.A."},
-    "contabilidad@sudameris.com.py": {"password": "SudaSecure77", "tenant_id": 102, "nombre": "Banco Sudameris"},
-    "admin@bancard.com.py": {"password": "BancardB2B#", "tenant_id": 103, "nombre": "Procesadora Bancard"}
-}
-
 @app.post("/v1/auth/login")
-@app.post("/v1/auth/login")
-def login(formulario_data: dict = None, session: Session = Depends(get_session)):
-    if formulario_data is None:
-        return {"error": "El servidor no recibió ningún dato"}
-    
-    # 1. Si los datos llegan vacíos desde JavaScript
-    if not formulario_data:
-        raise HTTPException(
-            status_code=401, 
-            detail="ERRORfrontend: El servidor recibió un formulario totalmente VACÍO."
-        )
-    
-    email_recibido = formulario_data.get("email") or formulario_data.get("username")
-    password_recibida = formulario_data.get("password")
-    
-    # 2. Si JavaScript envió datos, pero con nombres incorrectos
-    if not email_recibido:
-        llaves_enviadas = list(formulario_data.keys())
-        raise HTTPException(
-            status_code=401, 
-            detail=f"ERRORfrontend: No enviaste ni 'email' ni 'username'. Enviaste estos campos: {llaves_enviadas}"
-        )
-        
-    # 3. Buscar en la Base de Datos
-    statement = select(User).where(User.email == email_recibido)
+def login(request: LoginRequest, session: Session = Depends(get_session)):
+    # 1. Buscar el usuario en PostgreSQL de Railway
+    statement = select(User).where(User.email == request.username)
     usuario = session.exec(statement).first()
     
-    # 4. Si el correo no existe en Railway
-    if not usuario:
-        raise HTTPException(
-            status_code=401, 
-            detail=f"ERROR_BASE_DATOS: El correo '{email_recibido}' NO existe registrado en PostgreSQL."
-        )
+    # 2. Verificar si existe y si la contraseña es correcta
+    if not usuario or not usuario.verify_password(request.password):
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
         
-    # 5. Si el correo existe pero la contraseña está mal
-    if not usuario.verify_password(password_recibida):
-        raise HTTPException(
-            status_code=401, 
-            detail="ERROR_PASSWORD: El usuario existe, pero la CONTRASEÑA es incorrecta."
-        )
-        
-    return {"status": "success", "message": "¡Bienvenido!"}@app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
+    # 3. Generar el Token de Seguridad (Pase de entrada) que el frontend espera
+    from datetime import timedelta
+    payload = {
+        "company_id": 101, 
+        "user_id": usuario.id, 
+        "role": "admin",
+        "exp": datetime.utcnow() + timedelta(hours=12)
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    
+    # 4. Abrirle la puerta al usuario
+    return {
+        "access_token": token,
+        "empresa": "Retail S.A."
+    }
+
+@app.post("/v1/reconciliations/process", status_code=status.HTTP_202_ACCEPTED, tags=["Conciliador"])
 async def process_reconciliation(
     background_tasks: BackgroundTasks,
     file_mayor: UploadFile = File(...),
