@@ -865,7 +865,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
           <div class="sc-desc">Cruce exacto mediante identificador único de transacción. Filtra estados Aprobado / Reversado.</div>
         </div>
         <div class="sc-bd">
-          <div><div class="slot-label"><span class="tag-p">Portal</span>Extracto CSV</div><button class="slot-btn" id="b-ip" onclick="document.getElementById('f-ip').click()">↑ Seleccionar .CSV</button><input type="file" class="fi" id="f-ip" accept=".csv" onchange="loadF('ip',this)"></div>
+          <div><div class="slot-label"><span class="tag-p">Portal</span>Extracto CSV</div><button class="slot-btn" id="b-ip" onclick="document.getElementById('f-ip').click()">↑ Seleccionar .CSV</button><input type="file" class="fi" id="f-ip" accept=".csv" onchange="loadF('ip',this)" multiple></div>
           <div><div class="slot-label"><span class="tag-s">Sistema</span>Cobranza</div><button class="slot-btn" id="b-is" onclick="document.getElementById('f-is').click()">↑ Seleccionar .XLSX</button><input type="file" class="fi" id="f-is" accept=".xlsx,.xls" onchange="loadF('is',this)"></div>
         </div>
       </div>
@@ -1004,7 +1004,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
           <div>
             <div class="slot-label"><span class="tag-p">PDF</span>Extracto Bancard</div>
             <button class="slot-btn" id="b-bpdf" onclick="document.getElementById('f-bpdf').click()">↑ Cargar PDF</button>
-            <input type="file" class="fi" id="f-bpdf" accept=".pdf" onchange="loadBancardPdf(this)">
+            <input type="file" class="fi" id="f-bpdf" accept=".pdf" onchange="loadBancardPdf(this)" multiple accept=".xlsx, .xls">
           </div>
           <div>
             <div class="slot-label"><span class="tag-s">XLS</span>Libro Mayor</div>
@@ -2460,28 +2460,104 @@ renderBancardHist();
 // ═════════════════════════════════════════════════════════════════════
 // MOTOR DE CONEXIÓN CORPORATIVA CON EL BACKEND PYTHON (PRODUCCIÓN)
 // ═════════════════════════════════════════════════════════════════════
-const BACKEND_URL = "http://127.0.0.1:8000/v1";
-let BACKEND_TOKEN = null;
-let EMPRESA_CONECTADA = null;
-// Ahora el login solo ocurrirá cuando se presione el botón azul.
-// ESTA ES TU FUNCIÓN ORIGINAL MODIFICADA PARA TRABAJAR CON DATOS REALES DE PYTHON
-async function runConcil(){
-  var today = new Date().toLocaleDateString('es-PY', {day: '2-digit', month: '2-digit', year: 'numeric'});
-  
-  // Cambia automáticamente a la pestaña de Dashboard para mostrar progreso animado
-  goTo('dash', document.querySelectorAll('.sb-item')[0]); 
-  document.getElementById('dash-prog').style.display = 'block';
-  document.getElementById('dash-content').style.display = 'none';
-  
-  var setP = function(p, msg){
-    document.getElementById('prog-fill').style.width = p + '%';
-    document.getElementById('prog-sub').textContent = msg.toUpperCase();
-  };
+async function iniciarConciliacionSistema(fileMayor, filesGatewayList, processorName) {
+    const progContainer = document.getElementById('dash-prog');
+    const dashContent = document.getElementById('dash-content');
+    
+    if (progContainer) progContainer.style.display = 'block';
+    if (dashContent) dashContent.style.display = 'none';
 
+    function actualizarProgresoVisual(porcentaje, texto) {
+        const progressBar = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-status');
+        if (progressBar) progressBar.style.width = `${porcentaje}%`;
+        if (progressText) progressText.innerText = `${texto} (${porcentaje}%)`;
+    }
+
+    actualizarProgresoVisual(15, 'Enviando Libro Mayor y consolidando extractos en Railway...');
+
+    // Inicializamos el contenedor multipart/form-data
+    const formData = new FormData();
+    formData.append('file_mayor', fileMayor);
+    
+    // PEGADO CLAVE: Recorremos la lista completa de extractos (pueden ser 1, 2, 3 o más)
+    // Se agregan todos bajo la misma clave 'files_gateway' tal como FastAPI lo requiere
+    for (let i = 0; i < filesGatewayList.length; i++) {
+        formData.append('files_gateway', filesGatewayList[i]);
+    }
+    
+    formData.append('processor', processorName || 'bancard');
+
+    try {
+        const response = await fetch("https://conciliaapp-production.up.railway.app/v1/reconciliations/process", {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${BACKEND_TOKEN}` // Enviamos tu Token JWT de sesión activa
+            },
+            body: formData
+        });
+
+        if (!response.ok) throw new Error("Acceso denegado o sesión expirada.");
+        
+        const data = await response.json();
+        const taskId = data.task_id;
+        showToast(`🚀 Consolidación en curso en Railway. ID: ${taskId}`);
+
+        // Iniciamos el polling para escuchar el avance de Pandas en segundo plano
+        const intervalId = setInterval(async () => {
+            try {
+                const statusRes = await fetch(`https://conciliaapp-production.up.railway.app/v1/reconciliations/tasks/${taskId}`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` }
+                });
+                
+                if (!statusRes.ok) throw new Error("Error de comunicación.");
+                const taskResult = await statusRes.json();
+                
+                actualizarProgresoVisual(taskResult.progress_percentage, 'Corriendo modelos analíticos...');
+
+                if (taskResult.status === 'completed') {
+                    clearInterval(intervalId);
+                    if (progContainer) progContainer.style.display = 'none';
+                    if (dashContent) dashContent.style.display = 'block';
+                    
+                    window.ULTIMA_CONCILIACION_REAL = taskResult.results;
+                    renderDash(taskResult.results.discrepancies || []);
+                    showToast('✓ ¡Auditoría de extractos unificados finalizada!');
+                } 
+                else if (taskResult.status === 'failed') {
+                    clearInterval(intervalId);
+                    showToast('❌ Estructura de columnas incorrecta en los extractos.');
+                    ejecutarSimulacionLocal(actualizarProgresoVisual);
+                }
+            } catch (err) {
+                clearInterval(intervalId);
+                ejecutarSimulacionLocal(actualizarProgresoVisual);
+            }
+        }, 1500);
+
+    } catch (error) {
+        console.error(error);
+        showToast('⚠️ Error de red. Ejecutando respaldo local.');
+        ejecutarSimulacionLocal(actualizarProgresoVisual);
+    }
+}
   // 1. Identificar qué canal de archivos subió el usuario (Infonet, Netel o Pronet)
   let fileMayor = document.getElementById('f-is').files[0] || document.getElementById('f-ns').files[0] || document.getElementById('f-ps').files[0];
   let fileGateway = document.getElementById('f-ip').files[0] || document.getElementById('f-np').files[0] || document.getElementById('f-pp').files[0];
-  
+document.getElementById('btn-run-concilia')?.addEventListener('click', () => {
+    const inputMayor = document.getElementById('file-mayor-input');
+    const inputGateway = document.getElementById('file-gateway-input');
+    
+    // Validamos que exista el mayor y que al menos haya 1 extracto en la cola
+    if (!inputMayor?.files[0] || inputGateway?.files.length === 0) {
+        showToast('⚠ Error: Seleccione el Libro Mayor y al menos un extracto bancario del mes.');
+        return;
+    }
+
+    // Pasamos el archivo del mayor y TODOS los extractos acumulados en el input
+    iniciarConciliacionSistema(inputMayor.files[0], inputGateway.files, 'bancard');
+});
   // Determinar dinámicamente el canal según los inputs rellenados
   let canalDetectado = 'infonet';
   if (document.getElementById('f-ns').files[0]) canalDetectado = 'netel';
