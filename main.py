@@ -289,7 +289,7 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
     }
     session.add(nuevo_historial)
     session.commit()
- }
+ 
 # --- Autenticación y Endpoints de Historial ---
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -301,7 +301,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        # Asegúrate de que esta clave coincida con la que usas en tu lógica de login
+        # Asegúrate de usar la misma SECRET_KEY que en tu lógica de login
         payload = jwt.decode(token, "TU_SECRET_KEY", algorithms=["HS256"])
         email: str = payload.get("sub")
         if email is None:
