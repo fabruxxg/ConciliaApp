@@ -289,6 +289,13 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
     }
     session.add(nuevo_historial)
     session.commit()
+@app.get("/", response_class=HTMLResponse)
+async def servir_dashboard():
+    # Asegúrate de que este nombre sea exacto
+    nombre_archivo = "ConciliaAppXX.html" 
+    # Asegúrate de que el archivo esté en la misma carpeta que main.py
+    with open(nombre_archivo, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
 # --- Autenticación y Endpoints de Historial ---
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
