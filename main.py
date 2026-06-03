@@ -289,7 +289,7 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
     }
     session.add(nuevo_historial)
     session.commit()
-{
+ }
 @app.get("/v1/reconciliations/history")
 # 1. Configuración del esquema de seguridad (Asegúrate de que 'tokenUrl' coincida con tu ruta de login)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login") 
@@ -315,6 +315,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         if user is None:
             raise credentials_exception
         return user
+
 
 # ═════════════════════════════════════════════════════════════════════
 # 5. ENDPOINTS COMPLEMENTARIOS Y SERVIDOR DE VISTAS
