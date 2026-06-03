@@ -2655,7 +2655,7 @@ document.getElementById('btn-run-concilia')?.addEventListener('click', () => {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` },
       body: formData
-    });
+    }});
     const task = await res.json();
     
     if(task.task_id) {
