@@ -290,11 +290,10 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
     session.add(nuevo_historial)
     session.commit()
  }
-@app.get("/v1/reconciliations/history")
-# 1. Configuración del esquema de seguridad (Asegúrate de que 'tokenUrl' coincida con tu ruta de login)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login") 
+# --- Autenticación y Endpoints de Historial ---
 
-# 2. Definición de la función que busca al usuario
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -302,8 +301,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        # Asegúrate de usar la misma SECRET_KEY y ALGORITHM que usas para generar tus tokens
-        payload = jwt.decode(token, "TU_SECRET_KEY_AQUI", algorithms=["HS256"])
+        # Asegúrate de que esta clave coincida con la que usas en tu lógica de login
+        payload = jwt.decode(token, "TU_SECRET_KEY", algorithms=["HS256"])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -316,49 +315,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
         return user
 
-
-# ═════════════════════════════════════════════════════════════════════
-# 5. ENDPOINTS COMPLEMENTARIOS Y SERVIDOR DE VISTAS
-# ═════════════════════════════════════════════════════════════════════
-@app.get("/verificar-base-datos-secreta")
-def verificar_db(session: Session = Depends(get_session)):
-    todos_los_usuarios = session.exec(select(User)).all()
-    lista_emails = [u.email for u in todos_los_usuarios]
-    
-    statement = select(User).where(User.email == "auditor@retail.com.py")
-    admin = session.exec(statement).first()
-    
-    estado = ""
-    if admin:
-        admin.set_password("Fg200472")
-        session.add(admin)
-        session.commit()
-        estado = "El usuario ya existía. Acabo de REINICIAR su contraseña a: Fg200472"
-    else:
-        nuevo_admin = User(email="auditor@retail.com.py")
-        nuevo_admin.set_password("Fg200472")
-        session.add(nuevo_admin)
-        session.commit()
-        estado = "El usuario NO existía. Lo acabo de CREAR desde cero con la contraseña: Fg200472"
-        lista_emails.append("auditor@retail.com.py")
-        
-    return {
-        "usuarios_registrados_en_postgresql": lista_emails,
-        "resultado_de_la_operacion": estado,
-        "instrucciones": "Intenta loguearte ahora con el email 'auditor@retail.com.py' y la contraseña 'Fg200472'"
-    }
-
-
-@app.get("/", response_class=HTMLResponse)
-async def servir_dashboard():
-    nombre_archivo = "ConciliaAppXX.html" 
-    ruta_completa = os.path.join(os.path.dirname(__file__), nombre_archivo)
-    
-    try:
-        with open(ruta_completa, "r", encoding="utf-8") as archivo:
-            return archivo.read()
-    except FileNotFoundError:
-        return HTMLResponse(
-            content=f"<h2>Error: No se encontró el archivo '{nombre_archivo}' en la carpeta de Python.</h2>", 
-            status_code=404
+@app.get("/v1/reconciliations/history")
+async def obtener_historial(current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        statement = select(ReconciliationHistory).where(
+            ReconciliationHistory.user_email == current_user.email
         )
+        resultados = session.exec(statement).all()
+        return resultados
