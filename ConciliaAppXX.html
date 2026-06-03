@@ -725,14 +725,24 @@ async function procesarLoginFormulario(event) {
         
         // Si Python nos responde con el token, activamos el sistema
       // ... dentro de tu función procesarLoginFormulario ...
-        async function realizarLogin() {
-          const response = await fetch ('/login', { ... );
-          const data = await res.json();
-          console.log(data);
-      
-        if (data.access_token) {
-            BACKEND_TOKEN = data.access_token;
-            EMPRESA_CONECTADA = data.empresa;
+        // Asegúrate de que la función tenga 'async' antes de 'function'
+async function loginUser() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+
+    const response = await fetch('/login', {
+        method: 'POST',
+        body: new URLSearchParams({'username': email, 'password': password})
+    });
+
+    if (response.ok) {
+        const data = await response.json(); // Se declara 'data' aquí
+        localStorage.setItem('token', data.access_token);
+        window.location.href = '/dashboard'; // Aquí es donde te redirige
+    } else {
+        alert("Error en las credenciales");
+    }
+}
             
             // 🚀 AQUÍ ESTÁ LA ACTIVACIÓN AUTOMÁTICA:
             // Al confirmar que el token es válido, llamamos al historial de la nube
