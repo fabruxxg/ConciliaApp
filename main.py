@@ -233,14 +233,25 @@ async def process_reconciliation(
         "processor": processor,
         "created_at": datetime.now().isoformat()
     }
-# Dentro de tu función que procesa la auditoría, al terminar:
-with Session(engine) as session:
+async def procesar_conciliacion(
+    background_tasks: BackgroundTasks,
+    file_mayor: UploadFile = File(...),
+    # ... resto de tus parámetros ...
+):
+    # 1. ESTO ES LO QUE ESTABA FUERA. Ahora está aquí adentro y funciona:
+    mayor_bytes = await file_mayor.read() 
+    df_mayor = pd.read_excel(io.BytesIO(mayor_bytes))
+    
+    # 2. Aquí va el resto de tu lógica para consolidar extractos...
+    # ...
+    
+    # 3. Y aquí va la lógica de crear el historial en la BD
     nuevo_historial = ReconciliationHistory(
-        user_email=email_del_usuario_actual, # Debes obtenerlo del token
-        resumen_json=json.dumps(task_result.results),
-        empresa=EMPRESA_CONECTADA
+        user_email=current_user.email,
+        resumen_json=json.dumps(resultados),
+        empresa="Retail"
     )
-
+    # ... guardar en base de datos ...
     
     mayor_bytes = await file_mayor.read()
     gateway_bytes = await file_gateway.read()
