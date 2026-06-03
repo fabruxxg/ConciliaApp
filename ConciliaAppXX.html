@@ -722,7 +722,10 @@ async function procesarLoginFormulario(event) {
         if (!res.ok) {
             throw new Error("Credenciales inválidas");
         }
-        
+        catch (error) {
+    // Si algo falla, el programa caerá aquí en lugar de romperse
+    console.error("Hubo un error en la ejecución:", error);
+}
         // Si Python nos responde con el token, activamos el sistema
       // ... dentro de tu función procesarLoginFormulario ...
         // Asegúrate de que la función tenga 'async' antes de 'function'
