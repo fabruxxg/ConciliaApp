@@ -268,6 +268,22 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
         "results": task.get("results") if task["status"] == "completed" else None,
         "error": task.get("error") if task["failed"] == "failed" else None
     }
+# Dentro de tu función que procesa la auditoría, al terminar:
+with Session(engine) as session:
+    nuevo_historial = ReconciliationHistory(
+        user_email=email_del_usuario_actual, # Debes obtenerlo del token
+        resumen_json=json.dumps(task_result.results),
+        empresa=EMPRESA_CONECTADA
+    )
+    session.add(nuevo_historial)
+    session.commit()
+
+@app.get("/v1/reconciliations/history")
+async def obtener_historial(current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        statement = select(ReconciliationHistory).where(ReconciliationHistory.user_email == current_user.email)
+        historial = session.exec(statement).all()
+        return historial
 
 
 # ═════════════════════════════════════════════════════════════════════

@@ -1,6 +1,15 @@
 from sqlmodel import SQLModel, Field
 from passlib.context import CryptContext
+from sqlmodel import SQLModel, Field
+from typing import Optional
+import datetime
 
+class ReconciliationHistory(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_email: str
+    fecha_ejecucion: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+    resumen_json: str  # Aquí guardaremos los resultados (discrepancias, totales, etc.)
+    empresa: str
 # Esto configura el algoritmo para "encriptar" (hashing)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
