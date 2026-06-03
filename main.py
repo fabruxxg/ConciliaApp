@@ -300,7 +300,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        # Asegúrate de usar la misma SECRET_KEY que en tu lógica de login
+        # Asegúrate de que esta 'SECRET_KEY' sea la misma que usas en tu login
         payload = jwt.decode(token, "TU_SECRET_KEY", algorithms=["HS256"])
         email: str = payload.get("sub")
         if email is None:
