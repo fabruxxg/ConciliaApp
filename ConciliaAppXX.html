@@ -726,10 +726,10 @@ async function procesarLoginFormulario(event) {
         // Si Python nos responde con el token, activamos el sistema
       // ... dentro de tu función procesarLoginFormulario ...
         async function realizarLogin() {
-          const response = await fetch ('/login', { ... });
+          const response = await fetch ('/login', { ... );
           const data = await res.json();
           console.log(data);
-      }
+      
         if (data.access_token) {
             BACKEND_TOKEN = data.access_token;
             EMPRESA_CONECTADA = data.empresa;
@@ -2624,7 +2624,8 @@ document.getElementById('btn-run-concilia')?.addEventListener('click', () => {
 
   // Si el servidor Python no está activo, hace un fallback de simulación para que la app no muera
   if(!BACKEND_TOKEN) {
-    await autenticarApp();
+  async function miFuncion () {
+  await autenticarApp();
     if(!BACKEND_TOKEN) {
        // Fallback: Si Python está apagado, ejecuta la simulación por defecto de tu plantilla
        ejecutarSimulacionLocal(setP);
