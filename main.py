@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from database import init_db, engine, get_session
-from models import User
+from models import User, ReconciliationHistory
 from sqlmodel import Session, select
 import os
 
@@ -233,6 +233,14 @@ async def process_reconciliation(
         "processor": processor,
         "created_at": datetime.now().isoformat()
     }
+# Dentro de tu función que procesa la auditoría, al terminar:
+with Session(engine) as session:
+    nuevo_historial = ReconciliationHistory(
+        user_email=email_del_usuario_actual, # Debes obtenerlo del token
+        resumen_json=json.dumps(task_result.results),
+        empresa=EMPRESA_CONECTADA
+    )
+
     
     mayor_bytes = await file_mayor.read()
     gateway_bytes = await file_gateway.read()
@@ -268,13 +276,6 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
         "results": task.get("results") if task["status"] == "completed" else None,
         "error": task.get("error") if task["failed"] == "failed" else None
     }
-# Dentro de tu función que procesa la auditoría, al terminar:
-with Session(engine) as session:
-    nuevo_historial = ReconciliationHistory(
-        user_email=email_del_usuario_actual, # Debes obtenerlo del token
-        resumen_json=json.dumps(task_result.results),
-        empresa=EMPRESA_CONECTADA
-    )
     session.add(nuevo_historial)
     session.commit()
 
