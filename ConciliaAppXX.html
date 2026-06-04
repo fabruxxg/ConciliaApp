@@ -718,13 +718,13 @@ async function procesarLoginFormulario(event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: email, password: pass })
         }) 
-})finally { 
+}finally { 
     // Si algo falla, el programa caerá aquí en lugar de romperse
     console.error("Hubo un error en la ejecución:", error); 
-
+}
         if (!res.ok) {
             throw new Error("Credenciales inválidas");
-        }
+        })
         
         // Si Python nos responde con el token, activamos el sistema
       // ... dentro de tu función procesarLoginFormulario ...
