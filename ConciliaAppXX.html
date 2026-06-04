@@ -717,7 +717,7 @@ async function procesarLoginFormulario(event) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: email, password: pass })
-        }}}); catch (error) {
+        }}); catch (error) {
     // Si algo falla, el programa caerá aquí en lugar de romperse
     console.error("Hubo un error en la ejecución:", error);
 }
@@ -2658,7 +2658,7 @@ document.getElementById('btn-run-concilia')?.addEventListener('click', () => {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` },
       body: formData
-    }});
+    });
     const task = await res.json();
     
     if(task.task_id) {
