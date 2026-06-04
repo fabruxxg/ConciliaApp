@@ -717,7 +717,7 @@ async function procesarLoginFormulario(event) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: email, password: pass })
-        }); catch (error) {
+        }}}); catch (error) {
     // Si algo falla, el programa caerá aquí en lugar de romperse
     console.error("Hubo un error en la ejecución:", error);
 }
@@ -2648,12 +2648,12 @@ document.getElementById('btn-run-concilia')?.addEventListener('click', () => {
 
   // 2. Proceso Profesional con el Servidor
   setP(20, 'Enviando archivos al Servidor Python...');
-  
+  async function procesarConciliacionConServidor(setP) { 
   const formData = new FormData();
   formData.append('file_mayor', fileMayor);
   formData.append('file_gateway', fileGateway);
 
-  try {
+  try {   
     const res = await fetch(`${BACKEND_URL}/process?tenant_id=102`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` },
