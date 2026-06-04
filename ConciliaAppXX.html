@@ -760,9 +760,9 @@ async function loginUser() {
             }, 800);
         }
 // ...
-            EMPRESA_CONECTADA = data.empresa;
-            
+                       
             // Leemos el nombre dinámico que nos mandó Python
+            
             const nombreDinamico = data.usuario_nombre || "Usuario";
             if (typeof showToast === 'function') {
                 showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
