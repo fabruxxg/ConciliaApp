@@ -775,8 +775,7 @@ async function loginUser() {
             // Esperamos 800 milisegundos (lo que dura la animación) para borrarlo del todo
             setTimeout(() => {
                 overlay.style.display = 'none';
-            }, 800);
-    } catch (err) {
+            }, 800);catch (err) {
         errorMsg.style.display = 'block';
     }
 }
