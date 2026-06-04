@@ -711,71 +711,63 @@ async function procesarLoginFormulario(event) {
     
     errorMsg.style.display = 'none';
 
-    try {
-        // Enviar la petición a Railway
-        const res = await fetch("https://conciliaapp-production.up.railway.app/v1/auth/login", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: email, password: pass })
-        }) 
-}finally { 
-    // Si algo falla, el programa caerá aquí en lugar de romperse
-    console.error("Hubo un error en la ejecución:", error); 
-}
-        if (!res.ok) {
-            throw new Error("Credenciales inválidas");
-        }
-        
-        // Si Python nos responde con el token, activamos el sistema
-      // ... dentro de tu función procesarLoginFormulario ...
-        // Asegúrate de que la función tenga 'async' antes de 'function'
-async function loginUser() {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
+    // Reseteamos el mensaje de error del formulario
+  const errorMsg = document.getElementById('login-error-msg');
+  if (errorMsg) errorMsg.style.display = 'none';
 
-    const response = await fetch('/login', {
-        method: 'POST',
-        body: new URLSearchParams({'username': email, 'password': password})
+  try {
+    // 1. Enviamos la petición al servidor de Railway
+    const res = await fetch("https://conciliaapp-production.up.railway.app/v1/auth/login", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: email, password: pass })
     });
 
-    if (response.ok) {
-        const data = await response.json(); // Se declara 'data' aquí
-        localStorage.setItem('token', data.access_token);
-        window.location.href = '/dashboard'; // Aquí es donde te redirige
-    } else {
-        alert("Error en las credenciales");
+    // 2. Si la respuesta no es correcta (ej. contraseña mal), lanzamos error
+    if (!res.ok) {
+      const errData = await res.catch(() => ({}));
+      throw new Error(errData.detail || "Credenciales inválidas o usuario no registrado.");
     }
-}
-        
-            // 🚀 AQUÍ ESTÁ LA ACTIVACIÓN AUTOMÁTICA:
-            // Al confirmar que el token es válido, llamamos al historial de la nube
-            cargarHistorialNube(); 
-            
-            // ... el resto de tu código de animación (overlay.classList.add, etc.) ...
-            const overlay = document.getElementById('login-overlay');
-            overlay.classList.add('login-exit-animation');
-            
-            setTimeout(() => {
-                overlay.style.display = 'none';
-            }, 800);
-        }
-// ...
-                       
-            // Leemos el nombre dinámico que nos mandó Python
-            
-            const nombreDinamico = data.usuario_nombre || "Usuario";
-            if (typeof showToast === 'function') {
-                showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
-            }
-            
-            // 🌟 MAGIA 3D: Aplicamos la clase de animación en vez de ocultar de golpe
-            const overlay = document.getElementById('login-overlay');
-            overlay.classList.add('login-exit-animation');
-            
-            // Esperamos 800 milisegundos (lo que dura la animación) para borrarlo del todo
-            setTimeout(() => {
-                overlay.style.display = 'none';
-            }, 800); 
+
+    // 3. ¡AQUÍ SE DEFINE 'data'! Convertimos la respuesta en un objeto JavaScript
+    const data = await res.json();
+
+    // 4. Guardamos el Token JWT devuelto por Python para las futuras peticiones
+    if (data.access_token) {
+      localStorage.setItem('token', data.access_token);
+      if (typeof BACKEND_TOKEN !== 'undefined') {
+        BACKEND_TOKEN = data.access_token; // Actualiza la variable global si existe
+      }
+    }
+
+    // 5. Leemos el nombre dinámico que nos envió Python de forma segura
+    const nombreDinamico = data.usuario_nombre || "Usuario";
+    if (typeof showToast === 'function') {
+      showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
+    }
+
+    // 6. Activamos la descarga del historial guardado en PostgreSQL
+    if (typeof cargarHistorialNube === 'function') {
+      cargarHistorialNube();
+    }
+
+    // 7. Quitamos la pantalla de login con la animación tridimensional existente
+    const overlay = document.getElementById('login-overlay');
+    if (overlay) {
+      overlay.classList.add('login-exit-animation');
+      setTimeout(() => {
+        overlay.style.display = 'none';
+      }, 800);
+    }
+
+  } catch (error) {
+    // Aquí sí se captura el error correctamente si la red o las credenciales fallan
+    console.error("Hubo un error en la ejecución del Login:", error);
+    if (errorMsg) {
+      errorMsg.textContent = error.message || "Error al conectar con el servidor.";
+      errorMsg.style.display = 'block';
+    }
+  }
 
 // Vinculamos el formulario directamente a la función
 document.getElementById('login-form').addEventListener('submit', procesarLoginFormulario);
