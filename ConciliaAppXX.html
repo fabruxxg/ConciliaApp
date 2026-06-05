@@ -292,7 +292,7 @@ body{
 .page-hd{margin-bottom:2.5rem;}
 .page-eyebrow{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--primary);margin-bottom:.5rem;}
 .page-title{font-size:32px;font-weight:700;color:var(--tx);letter-spacing:-.8px;line-height:1.2;}
-.page-title em{font-style:normal;color:var(--primary);background: linear-gradient(135deg, var(--primary), var(--amber)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
+.page-title em{font-style:normal;color:var(--primary);background: linear-gradient(135deg, var(--primary), var(--amber)); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
 .page-sub{font-size:14px;color:var(--tx3);margin-top:.5rem;line-height:1.6;max-width:650px;}
 
 /* ══ UTILIDAD 3D TILT ══ */
@@ -324,7 +324,7 @@ body{
   border:1px solid var(--border2);
 }
 .hero-title{font-size:42px;font-weight:800;line-height:1.1;letter-spacing:-1.5px;color:var(--tx);margin-bottom:1rem;}
-.hero-title .grad{background: linear-gradient(135deg, var(--primary) 0%, var(--amber) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
+.hero-title .grad{background: linear-gradient(135deg, var(--primary) 0%, var(--amber) 100%); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
 .hero-sub{font-size:15px;color:var(--tx3);max-width:550px;margin:0 auto;line-height:1.6;font-weight:450;}
 
 .demo-banner {
@@ -764,6 +764,8 @@ async function procesarLoginFormulario(event) {
       errorMsg.textContent = error.message || "Error al conectar con el servidor.";
       errorMsg.style.display = 'block';
     }
+  }
+}
 
 // Vinculamos el formulario directamente a la función
 document.getElementById('login-form').addEventListener('submit', procesarLoginFormulario);
@@ -2492,254 +2494,107 @@ renderBancardHist();
 // MOTOR DE CONEXIÓN CORPORATIVA CON EL BACKEND PYTHON (PRODUCCIÓN)
 // ═════════════════════════════════════════════════════════════════════
 async function iniciarConciliacionSistema(fileMayor, filesGatewayList, processorName) {
-    const progContainer = document.getElementById('dash-prog');
-    const dashContent = document.getElementById('dash-content');
-    
-    if (progContainer) progContainer.style.display = 'block';
-    if (dashContent) dashContent.style.display = 'none';
+  const progContainer = document.getElementById('dash-prog');
+  const dashContent = document.getElementById('dash-content');
 
-    function actualizarProgresoVisual(porcentaje, texto) {
-        const progressBar = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-status');
-        if (progressBar) progressBar.style.width = `${porcentaje}%`;
-        if (progressText) progressText.innerText = `${texto} (${porcentaje}%)`;
-    }
-// Pégalo aquí, cerca de tus otras funciones de API
-async function cargarHistorialNube() {
-    try {
-        // Hacemos el llamado a tu nuevo endpoint de Python
-        const res = await fetch("https://conciliaapp-production.up.railway.app/v1/reconciliations/history", {
-            headers: { 
-                'Authorization': `Bearer ${BACKEND_TOKEN}`,
-                'Content-Type': 'application/json'
-            }
-        });
+  if (progContainer) progContainer.style.display = 'block';
+  if (dashContent) dashContent.style.display = 'none';
 
-        if (!res.ok) throw new Error("No se pudo obtener el historial.");
-
-        const historial = await res.json();
-        
-        // 1. Limpiamos tu tabla o lista de historial actual
-        // (Asegúrate de que 'renderizarHistorialEnInterfaz' exista o reemplázalo por tu función de renderizado)
-        renderizarHistorialEnInterfaz(historial);
-        
-    } catch (err) {
-        console.error("Error al cargar historial:", err);
-        showToast("No se pudo conectar al historial de la nube.");
-    }
-}
-
-    actualizarProgresoVisual(15, 'Enviando Libro Mayor y consolidando extractos en Railway...');
-
-    // Inicializamos el contenedor multipart/form-data
-    const formData = new FormData();
-    formData.append('file_mayor', fileMayor);
-    
-    // PEGADO CLAVE: Recorremos la lista completa de extractos (pueden ser 1, 2, 3 o más)
-    // Se agregan todos bajo la misma clave 'files_gateway' tal como FastAPI lo requiere
-    for (let i = 0; i < filesGatewayList.length; i++) {
-        formData.append('files_gateway', filesGatewayList[i]);
-    }
-    
-    formData.append('processor', processorName || 'bancard');
-
-    try {
-        const response = await fetch("https://conciliaapp-production.up.railway.app/v1/reconciliations/process", {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${BACKEND_TOKEN}` // Enviamos tu Token JWT de sesión activa
-            },
-            body: formData
-        });
-
-        if (!response.ok) throw new Error("Acceso denegado o sesión expirada.");
-        
-        const data = await response.json();
-        const taskId = data.task_id;
-        showToast(`🚀 Consolidación en curso en Railway. ID: ${taskId}`);
-
-        // Iniciamos el polling para escuchar el avance de Pandas en segundo plano
-        const intervalId = setInterval(async () => {
-            try {
-                const statusRes = await fetch(`https://conciliaapp-production.up.railway.app/v1/reconciliations/tasks/${taskId}`, {
-                    method: 'GET',
-                    headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` }
-                });
-                
-                if (!statusRes.ok) throw new Error("Error de comunicación.");
-                const taskResult = await statusRes.json();
-                
-                actualizarProgresoVisual(taskResult.progress_percentage, 'Corriendo modelos analíticos...');
-
-                if (taskResult.status === 'completed') {
-                    clearInterval(intervalId);
-                    if (progContainer) progContainer.style.display = 'none';
-                    if (dashContent) dashContent.style.display = 'block';
-                    
-                    window.ULTIMA_CONCILIACION_REAL = taskResult.results;
-                    renderDash(taskResult.results.discrepancies || []);
-                    showToast('✓ ¡Auditoría de extractos unificados finalizada!');
-                } 
-                else if (taskResult.status === 'failed') {
-                    clearInterval(intervalId);
-                    showToast('❌ Estructura de columnas incorrecta en los extractos.');
-                    ejecutarSimulacionLocal(actualizarProgresoVisual);
-                }
-            } catch (err) {
-                clearInterval(intervalId);
-                ejecutarSimulacionLocal(actualizarProgresoVisual);
-            }
-        }, 1500);
-
-    } catch (error) {
-        console.error(error);
-        showToast('⚠️ Error de red. Ejecutando respaldo local.');
-        ejecutarSimulacionLocal(actualizarProgresoVisual);
-    }
-}
-  // 1. Identificar qué canal de archivos subió el usuario (Infonet, Netel o Pronet)
-  let fileMayor = document.getElementById('f-is').files[0] || document.getElementById('f-ns').files[0] || document.getElementById('f-ps').files[0];
-  let fileGateway = document.getElementById('f-ip').files[0] || document.getElementById('f-np').files[0] || document.getElementById('f-pp').files[0];
-document.getElementById('btn-run-concilia')?.addEventListener('click', () => {
-    const inputMayor = document.getElementById('file-mayor-input');
-    const inputGateway = document.getElementById('file-gateway-input');
-    
-    // Validamos que exista el mayor y que al menos haya 1 extracto en la cola
-    if (!inputMayor?.files[0] || inputGateway?.files.length === 0) {
-        showToast('⚠ Error: Seleccione el Libro Mayor y al menos un extracto bancario del mes.');
-        return;
-    }
-
-    // Pasamos el archivo del mayor y TODOS los extractos acumulados en el input
-    iniciarConciliacionSistema(inputMayor.files[0], inputGateway.files, 'bancard');
-});
-  // Determinar dinámicamente el canal según los inputs rellenados
-  let canalDetectado = 'infonet';
-  if (document.getElementById('f-ns').files[0]) canalDetectado = 'netel';
-  if (document.getElementById('f-ps').files[0]) canalDetectado = 'pronet';
-
-  // Si el servidor Python no está activo, hace un fallback de simulación para que la app no muera
-  if(!BACKEND_TOKEN) {
-  async function miFuncion () {
-  await autenticarApp();
-    if(!BACKEND_TOKEN) {
-       // Fallback: Si Python está apagado, ejecuta la simulación por defecto de tu plantilla
-       ejecutarSimulacionLocal(setP);
-       return;
-    }
+  function actualizarProgresoVisual(porcentaje, texto) {
+    const progressBar = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-status');
+    if (progressBar) progressBar.style.width = `${porcentaje}%`;
+    if (progressText) progressText.innerText = `${texto} (${porcentaje}%)`;
   }
 
-  // 2. Proceso Profesional con el Servidor
-  setP(20, 'Enviando archivos al Servidor Python...');
-  async function procesarConciliacionConServidor(setP) { 
+  actualizarProgresoVisual(15, 'Enviando Libro Mayor y consolidando extractos en Railway...');
+
   const formData = new FormData();
   formData.append('file_mayor', fileMayor);
-  formData.append('file_gateway', fileGateway);
 
-  try {   
-    const res = await fetch(`${BACKEND_URL}/process?tenant_id=102`, {
+  for (let i = 0; i < filesGatewayList.length; i++) {
+    formData.append('files_gateway', filesGatewayList[i]);
+  }
+
+  formData.append('processor', processorName || 'bancard');
+
+  try {
+    const response = await fetch('https://conciliaapp-production.up.railway.app/v1/reconciliations/process', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` },
       body: formData
     });
-    const task = await res.json();
-    
-    if(task.task_id) {
-      setP(40, 'Motor Pandas: Cruzando bases de datos...');
-      monitorearTareaPython(task.task_id, canalDetectado, today, setP);
-    } else {
-      throw new Error("No se generó ID de tarea");
-    }
-  } catch(err) {
-    showToast('❌ Error al procesar en servidor. Usando motor alternativo.');
-    ejecutarSimulacionLocal(setP);
+
+    if (!response.ok) throw new Error('Acceso denegado o sesión expirada.');
+
+    const data = await response.json();
+    const taskId = data.task_id;
+
+    if (!taskId) throw new Error('No se recibió un ID de tarea.');
+
+    showToast(`🚀 Consolidación en curso en Railway. ID: ${taskId}`);
+
+    const intervalId = setInterval(async () => {
+      try {
+        const statusRes = await fetch(`https://conciliaapp-production.up.railway.app/v1/reconciliations/tasks/${taskId}`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` }
+        });
+
+        if (!statusRes.ok) throw new Error('Error de comunicación.');
+
+        const taskResult = await statusRes.json();
+        actualizarProgresoVisual(taskResult.progress_percentage || 0, 'Corriendo modelos analíticos...');
+
+        if (taskResult.status === 'completed') {
+          clearInterval(intervalId);
+          if (progContainer) progContainer.style.display = 'none';
+          if (dashContent) dashContent.style.display = 'block';
+          window.ULTIMA_CONCILIACION_REAL = taskResult.results;
+          renderDash(taskResult.results.discrepancies || []);
+          showToast('✓ ¡Auditoría de extractos unificados finalizada!');
+        } else if (taskResult.status === 'failed') {
+          clearInterval(intervalId);
+          showToast('❌ Estructura de columnas incorrecta en los extractos.');
+          if (typeof ejecutarSimulacionLocal === 'function') ejecutarSimulacionLocal(actualizarProgresoVisual);
+        }
+      } catch (err) {
+        clearInterval(intervalId);
+        if (typeof ejecutarSimulacionLocal === 'function') ejecutarSimulacionLocal(actualizarProgresoVisual);
+      }
+    }, 1500);
+  } catch (error) {
+    console.error(error);
+    showToast('⚠️ Error de red. Ejecutando respaldo local.');
+    if (typeof ejecutarSimulacionLocal === 'function') ejecutarSimulacionLocal(actualizarProgresoVisual);
   }
 }
 
-// Monitorea el estado del cálculo en el backend en tiempo real
-function monitorearTareaPython(taskId, canal, fecha, setP) {
-  const interval = setInterval(async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/tasks/${taskId}`, {
-        headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` }
-      });
-      const result = await res.json();
+// Fallback simple si el backend no está disponible.
+document.getElementById('btn-run-concilia')?.addEventListener('click', () => {
+  const inputMayor = document.getElementById('file-mayor-input');
+  const inputGateway = document.getElementById('file-gateway-input');
 
-      if(result.status === 'PROCESSING') {
-        setP(60, 'Analizando desvíos y aplicando reglas contables...');
-      } 
-      else if(result.status === 'SUCCESS') {
-        clearInterval(interval);
-        setP(90, 'Formateando registros de auditoría...');
+  if (!inputMayor?.files[0] || inputGateway?.files.length === 0) {
+    showToast('⚠ Error: Seleccione el Libro Mayor y al menos un extracto bancario del mes.');
+    return;
+  }
 
-        if (result.data && result.data.resultados) {
-          // Traducimos el output matemático de Python al formato visual exacto que requiere tu HTML
-          let filasAuditadas = result.data.resultados.map(item => {
-            return {
-              sistema: canal,
-              fecha: fecha,
-              trx: item.referencia || 'S/R',
-              cliente: item.monto_mayor > 0 ? "Transacción Interna Verificada" : "Transacción Externa No Registrada",
-              ruc: "80000000-0",
-              factura: item.referencia || 'S/N',
-              impPortal: item.monto_gateway || 0,
-              impSys: item.monto_mayor || 0,
-              diff: item.desvio || 0,
-              sinCruz: item.monto_mayor === 0 || item.monto_gateway === 0,
-              estado: item.estado === 'OK' ? 'Aprobado' : 'Reversado',
-              causa: item.categoria === 'DESVIO_MONTO' ? 'Desvío de importe detectado' : 
-                     (item.categoria === 'FALTANTE_EN_MAYOR' ? 'Faltante en Libro Mayor' : 'Faltante en Pasarela')
-            };
-          });
+  iniciarConciliacionSistema(inputMayor.files[0], inputGateway.files, 'bancard');
+});
 
-          // Estructuramos la auditoría dentro de la memoria histórica global del Dashboard (ST.history)
-          let auditoriaReal = {
-            date: fecha + " (Servidor Python)",
-            ts: Date.now(),
-            rows: filasAuditadas
-          };
-
-          if (typeof ST !== 'undefined' && ST.history) {
-            ST.history.unshift(auditoriaReal); // Inyectamos al inicio
-            if (typeof saveHist === 'function') saveHist(); // Guardado persistente
-            if (typeof renderHist === 'function') renderHist(); // Redibujar tablas históricas
-            
-            // Ocultamos la barra de carga y mostramos el Dashboard con los datos reales recalculados
-            setP(100, '¡Conciliación completa!');
-            setTimeout(() => {
-              document.getElementById('dash-prog').style.display = 'none';
-              document.getElementById('dash-content').style.display = 'block';
-              renderDash(filasAuditadas); // Redibuja los gráficos tridimensionales con la data de Python
-              showToast('✓ Auditoría finalizada por el Servidor local');
-            }, 800);
-          }
-        }
-      } 
-      else if(result.status === 'FAILURE') {
-        clearInterval(interval);
-        showToast('❌ El motor de Python reportó un error en el archivo.');
-        ejecutarSimulacionLocal(setP);
-      }
-    } catch(err) {
-      clearInterval(interval);
-      ejecutarSimulacionLocal(setP);
-    }
-  }, 1000);
-}
-
-// Mantiene la simulación original por si el servidor Python llega a estar apagado (Garantía de funcionamiento)
 function ejecutarSimulacionLocal(setP) {
-  setTimeout(function(){
+  setTimeout(function () {
     setP(50, 'Ejecutando cruce local simulado...');
-    setTimeout(function(){
+    setTimeout(function () {
       setP(100, 'Completado');
       document.getElementById('dash-prog').style.display = 'none';
       document.getElementById('dash-content').style.display = 'block';
-      // Llama a la generación aleatoria por defecto que ya tenías instalada
-      var demoRows = genDemoRows(); 
-      if(typeof ST !== 'undefined'){
-        ST.history.unshift({date: new Date().toLocaleDateString('es-PY') + " (Demo)", ts: Date.now(), rows: demoRows});
-        saveHist(); renderHist();
+      var demoRows = genDemoRows();
+      if (typeof ST !== 'undefined') {
+        ST.history.unshift({ date: new Date().toLocaleDateString('es-PY') + ' (Demo)', ts: Date.now(), rows: demoRows });
+        saveHist();
+        renderHist();
       }
       renderDash(demoRows);
       showToast('✓ Conciliación completada (Modo Demo Local)');
@@ -2748,5 +2603,6 @@ function ejecutarSimulacionLocal(setP) {
 }
 
 // Autenticación inicial automática al abrir el dashboard
+</script>
 </body>
 </html>
