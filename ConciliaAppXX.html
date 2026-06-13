@@ -2946,9 +2946,11 @@ function renderHomeStats() {
   history.forEach(function(day) {
     if (day.rows) {
       totalTxns += day.rows.length;
-      var ok = day.rows.filter(function(r){ return r.match_status === 'OK'; }).length;
+      // "ok" = crossed correctly: present in both files AND amount matches within 0.5
+      var ok = day.rows.filter(function(r){ return !r.sinCruz && Math.abs(r.diff) <= 0.5; }).length;
       if (day.rows.length > 0) matchRates.push((ok / day.rows.length) * 100);
-      var dev = day.rows.filter(function(r){ return r.match_status !== 'OK'; }).length;
+      // desvíos = missing cross OR amount mismatch
+      var dev = day.rows.filter(function(r){ return r.sinCruz || Math.abs(r.diff) > 0.5; }).length;
       totalDesvios += dev;
     }
   });
@@ -2971,12 +2973,14 @@ function renderHomeStats() {
   }
   var recent = history.slice(0, 5);
   container.innerHTML = recent.map(function(day) {
-    var ok = day.rows ? day.rows.filter(function(r){return r.match_status==='OK';}).length : 0;
     var total = day.rows ? day.rows.length : 0;
-    var pct = total > 0 ? ((ok/total)*100).toFixed(1)+'%' : '—';
-    var color = ok/total > 0.9 ? 'var(--teal)' : ok/total > 0.7 ? 'var(--amber)' : 'var(--red)';
-    var bgColor = ok/total > 0.9 ? 'var(--tealb)' : ok/total > 0.7 ? 'var(--amberb)' : 'var(--redb)';
-    return '<div class="home-recent-item"><div class="home-ri-dot" style="background:'+color+'"></div><div><div class="home-ri-name">'+day.date+'</div><div class="home-ri-meta">'+total+' transacciones · '+(day.proc||'Infonet')+'</div></div><div class="home-ri-badge" style="background:'+bgColor+';color:'+color+'">'+pct+'</div></div>';
+    var ok = day.rows ? day.rows.filter(function(r){ return !r.sinCruz && Math.abs(r.diff) <= 0.5; }).length : 0;
+    var ratio = total > 0 ? ok / total : 0;
+    var pct = total > 0 ? (ratio * 100).toFixed(1) + '%' : '—';
+    var color = ratio >= 0.9 ? 'var(--teal)' : ratio >= 0.7 ? 'var(--amber)' : 'var(--red)';
+    var bgColor = ratio >= 0.9 ? 'var(--tealb)' : ratio >= 0.7 ? 'var(--amberb)' : 'var(--redb)';
+    var sys = day.rows ? [...new Set(day.rows.map(function(r){return r.sistema;}).filter(Boolean))].join(', ') : (day.proc || 'N/A');
+    return '<div class="home-recent-item"><div class="home-ri-dot" style="background:'+color+'"></div><div><div class="home-ri-name">'+day.date+'</div><div class="home-ri-meta">'+total+' transacciones · '+sys+'</div></div><div class="home-ri-badge" style="background:'+bgColor+';color:'+color+'">'+pct+'</div></div>';
   }).join('');
 }
 </script>
