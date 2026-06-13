@@ -669,22 +669,26 @@ tbody tr.has-diff td{background:var(--amberb);}
 }
 
 /* ══════════════════════════════════════
-   LOGIN HERO — HIGGSFIELD BACKGROUND
+   LOGIN HERO — SHADER BACKGROUND
 ══════════════════════════════════════ */
-#login-overlay {
-  background-image: url('https://d8j0ntlcm91z4.cloudfront.net/user_3F2CJDW3Ml3FTkI7qCdow9rVBJT/hf_20260613_114436_575b2257-bd81-4494-8060-4479050e89a8.png') !important;
-  background-size: cover !important;
-  background-position: center !important;
+#login-shader-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.55;
 }
 #login-overlay::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(13, 7, 3, 0.72);
-  backdrop-filter: blur(2px);
-  z-index: 0;
+  background: radial-gradient(ellipse at 50% 60%, rgba(249,115,22,0.08) 0%, rgba(13,7,3,0.82) 70%);
+  z-index: 1;
+  pointer-events: none;
 }
-#login-overlay > * { position: relative; z-index: 1; }
+#login-overlay > * { position: relative; z-index: 2; }
+#login-shader-canvas { z-index: 0 !important; position: absolute !important; }
 
 .login-logo-img {
   width: 72px;
@@ -807,6 +811,102 @@ tbody tr.has-diff td{background:var(--amberb);}
 }
 .slot-btn:hover::after { opacity: 1; }
 
+/* ══ HOME SCREEN ══ */
+.home-hero {
+  padding: 2.5rem 0 2rem;
+  text-align: left;
+}
+.home-hero-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 14px; border-radius: 99px;
+  background: var(--primary-f); border: 1px solid var(--border2);
+  color: var(--primary); font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.3px; margin-bottom: 18px;
+}
+.home-hero-title {
+  font-size: 2.6rem; font-weight: 800; letter-spacing: -1.5px;
+  line-height: 1.15; margin-bottom: 12px; color: var(--tx);
+}
+.home-hero-sub {
+  font-size: 15px; color: var(--tx3); max-width: 560px;
+  line-height: 1.65; margin-bottom: 28px;
+}
+.home-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.home-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.hm-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 16px; padding: 20px 22px;
+  backdrop-filter: blur(12px);
+  transition: border-color 0.3s, transform 0.35s cubic-bezier(0.175,0.885,0.32,1.275);
+}
+.hm-card:hover { border-color: var(--border2); }
+.hm-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+.hm-val {
+  font-size: 1.8rem; font-weight: 800; letter-spacing: -0.8px;
+  color: var(--tx); margin-bottom: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.hm-label { font-size: 12px; color: var(--tx3); font-weight: 500; }
+
+.home-bottom {
+  display: grid; grid-template-columns: 1fr 340px; gap: 20px;
+}
+.home-recent, .home-quickstart {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 16px; padding: 22px; backdrop-filter: blur(12px);
+}
+.home-section-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; color: var(--tx2);
+  margin-bottom: 18px; letter-spacing: 0.2px;
+}
+.home-empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 40px 20px; text-align: center;
+}
+.home-recent-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.home-recent-item:last-child { border-bottom: none; }
+.home-ri-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--teal); flex-shrink: 0;
+}
+.home-ri-name { font-size: 13px; font-weight: 600; color: var(--tx2); }
+.home-ri-meta { font-size: 11.5px; color: var(--tx3); margin-top: 2px; }
+.home-ri-badge {
+  margin-left: auto; font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 6px;
+  background: var(--tealb); color: var(--teal);
+}
+.home-qs-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.home-qs-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 14px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; text-align: center;
+  transition: border-color 0.3s, background 0.3s, transform 0.35s cubic-bezier(0.175,0.885,0.32,1.275);
+}
+.home-qs-card:hover { border-color: var(--border2); background: var(--bg4); }
+.home-qs-label { font-size: 12px; font-weight: 600; color: var(--tx3); }
+
+@media (max-width: 900px) {
+  .home-metrics-row { grid-template-columns: 1fr 1fr; }
+  .home-bottom { grid-template-columns: 1fr; }
+}
+
 /* ══ BADGE PULSE for active states ══ */
 .sb-item.on::before {
   content: '';
@@ -827,14 +927,17 @@ tbody tr.has-diff td{background:var(--amberb);}
 <canvas id="webgl-canvas"></canvas>
 <div class="ambient-glow"></div>
 
-<div id="login-overlay" style="position: fixed; inset: 0; background: rgba(19, 10, 5, 0.85); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;">
-  
+<div id="login-overlay" style="position: fixed; inset: 0; background: #0d0703; z-index: 99999; display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif; overflow: hidden;">
+  <canvas id="login-shader-canvas"></canvas>
   <div class="login-glass-card">
-    <img src="https://d8j0ntlcm91z4.cloudfront.net/user_3F2CJDW3Ml3FTkI7qCdow9rVBJT/hf_20260613_114434_72d7b9e3-263f-4fb5-8ed4-590f38c0c26c.png" class="login-logo-img" alt="ConciliaApp">
-    <div style="font-size: 30px; font-weight: 800; color: #fefbf9; margin-bottom: 6px; letter-spacing: -0.8px;">
-      Concilia<span style="color: #f97316;">App</span>
+    <img src="https://d8j0ntlcm91z4.cloudfront.net/user_3F2CJDW3Ml3FTkI7qCdow9rVBJT/hf_20260613_115422_817a6d9a-8194-4161-9af5-bd609149e189.png" class="login-logo-img" alt="SmartMatch">
+    <div style="font-size: 28px; font-weight: 800; color: #fefbf9; margin-bottom: 6px; letter-spacing: -0.8px;">
+      Smart<span style="color: #f97316;">Match</span>
     </div>
-    <div style="font-size: 13px; color: #cbb8ae; margin-bottom: 32px; font-weight: 500; letter-spacing: 0.3px;">
+    <div style="font-size: 11px; color: #cbb8ae; margin-bottom: 4px; font-weight: 600; letter-spacing: 1.8px; text-transform: uppercase;">
+      by shift consulting
+    </div>
+    <div style="font-size: 12px; color: #8a7570; margin-bottom: 28px; font-weight: 400; letter-spacing: 0.2px;">
       Motor de Inteligencia Financiera
     </div>
 
@@ -911,6 +1014,8 @@ async function procesarLoginFormulario(event) {
       overlay.classList.add('login-exit-animation');
       setTimeout(() => {
         overlay.style.display = 'none';
+        goTo('home', document.getElementById('sb-home'));
+        renderHomeStats();
       }, 800);
     }
 
@@ -933,14 +1038,21 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
 <aside class="sidebar">
   <div class="sidebar-scroll-area">
     <div class="sb-logo">
-      <div class="sb-mark">C</div>
-      <div class="sb-name">ConciliaApp</div>
-      <div class="sb-tagline">Motor Corporativo de Inteligencia</div>
+      <div class="sb-mark">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <div class="sb-name">SmartMatch</div>
+      <div class="sb-tagline">by shift consulting</div>
     </div>
 
+    <nav class="sb-nav" style="flex:0;margin-bottom:4px;">
+      <div class="sb-item on" onclick="goTo('home',this)" id="sb-home">
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span><span>Inicio</span>
+      </div>
+    </nav>
     <div class="sb-section">Módulos</div>
     <nav class="sb-nav">
-      <div class="sb-item on" onclick="goTo('upload',this)">
+      <div class="sb-item" onclick="goTo('upload',this)">
         <span class="sb-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span><span>Cargar archivos</span>
       </div>
       <div class="sb-item" onclick="goTo('hist',this)">
@@ -996,9 +1108,9 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
 <div class="main">
   <div class="topbar">
     <div class="tb-bc">
-      <span class="tb-s">ConciliaApp</span>
+      <span class="tb-s">SmartMatch</span>
       <span class="tb-sep">/</span>
-      <span class="tb-p" id="tb-page">Cargar archivos</span>
+      <span class="tb-p" id="tb-page">Inicio</span>
     </div>
     <div class="tb-right">
       <div class="tb-date" id="tb-date"></div>
@@ -1006,8 +1118,102 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     </div>
   </div>
 
+  <!-- PANTALLA HOME -->
+  <div class="scr on" id="scr-home">
+    <div class="home-hero reveal">
+      <div class="home-hero-badge">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Motor de Inteligencia Financiera
+      </div>
+      <h1 class="home-hero-title">Bienvenido a <span class="grad">SmartMatch</span></h1>
+      <p class="home-hero-sub">Sistema de conciliación automática multiproveedor. Detecta desvíos, valida pagos y genera auditorías en segundos.</p>
+      <div class="home-actions">
+        <button class="act-btn primary" onclick="goTo('upload', document.querySelectorAll('.sb-item')[1])">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:7px;vertical-align:-2px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Nueva Conciliación
+        </button>
+        <button class="act-btn" onclick="goTo('hist', document.querySelectorAll('.sb-item')[2])">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:7px;vertical-align:-2px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Ver Historial
+        </button>
+      </div>
+    </div>
+
+    <div class="home-metrics-row reveal reveal-delay-1" id="home-stats">
+      <div class="hm-card card-tilt">
+        <div class="hm-icon" style="background:rgba(249,115,22,0.12);color:#f97316;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="hm-val" id="hm-sessions">0</div>
+        <div class="hm-label">Sesiones procesadas</div>
+      </div>
+      <div class="hm-card card-tilt">
+        <div class="hm-icon" style="background:rgba(16,185,129,0.12);color:#10b981;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="hm-val" id="hm-match">—</div>
+        <div class="hm-label">Tasa de match promedio</div>
+      </div>
+      <div class="hm-card card-tilt">
+        <div class="hm-icon" style="background:rgba(251,191,36,0.12);color:#fbbf24;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        </div>
+        <div class="hm-val" id="hm-txns">0</div>
+        <div class="hm-label">Transacciones auditadas</div>
+      </div>
+      <div class="hm-card card-tilt">
+        <div class="hm-icon" style="background:rgba(244,63,94,0.12);color:#f43f5e;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="hm-val" id="hm-desvios">0</div>
+        <div class="hm-label">Desvíos detectados</div>
+      </div>
+    </div>
+
+    <div class="home-bottom reveal reveal-delay-2">
+      <div class="home-recent">
+        <div class="home-section-title">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Actividad Reciente
+        </div>
+        <div id="home-recent-list">
+          <div class="home-empty-state">
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;margin-bottom:12px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div style="color:var(--tx3);font-size:13px;">No hay conciliaciones aún. Inicia tu primera sesión.</div>
+            <button class="act-btn primary" style="margin-top:16px;font-size:12px;padding:8px 18px" onclick="goTo('upload', document.querySelectorAll('.sb-item')[1])">Empezar ahora</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-quickstart">
+        <div class="home-section-title">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Acciones Rápidas
+        </div>
+        <div class="home-qs-grid">
+          <div class="home-qs-card card-tilt" onclick="goTo('upload', document.querySelectorAll('.sb-item')[1])">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <div class="home-qs-label">Cargar archivos</div>
+          </div>
+          <div class="home-qs-card card-tilt" onclick="goTo('hist', document.querySelectorAll('.sb-item')[2])">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div class="home-qs-label">Ver historial</div>
+          </div>
+          <div class="home-qs-card card-tilt" onclick="goTo('bancard', document.querySelectorAll('.sb-item')[4])">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 10l9-7 9 7"/><line x1="9" y1="21" x2="9" y2="13"/><line x1="15" y1="21" x2="15" y2="13"/></svg>
+            <div class="home-qs-label">Auditoría Bancard</div>
+          </div>
+          <div class="home-qs-card card-tilt" onclick="exportHistExcel()">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <div class="home-qs-label">Exportar planilla</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- PANTALLA CARGAR ARCHIVOS -->
-  <div class="scr on" id="scr-upload">
+  <div class="scr" id="scr-upload">
     <div class="upload-hero reveal">
       <div class="hero-eyebrow">Motor de Procesamiento Financiero</div>
       <div class="hero-title">Conciliaciones <span class="grad">Inteligentes</span></div>
@@ -1413,8 +1619,91 @@ function renderizarHistorialEnInterfaz(historial) {
   window.onload = function() {
     animate();
     init3DTilt();
+    initLoginShader();
   }
 })();
+
+// ══ LOGIN BACKGROUND — WebGL Shader Animation (Three.js) ══
+function initLoginShader() {
+  var canvas = document.getElementById('login-shader-canvas');
+  if (!canvas || !window.THREE) return;
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.Camera();
+  camera.position.z = 1;
+
+  var geometry = new THREE.PlaneGeometry(2, 2);
+
+  var uniforms = {
+    time:       { value: 1.0 },
+    resolution: { value: new THREE.Vector2() }
+  };
+
+  var material = new THREE.ShaderMaterial({
+    uniforms: uniforms,
+    vertexShader: 'void main(){gl_Position=vec4(position,1.0);}',
+    fragmentShader: [
+      'precision highp float;',
+      'uniform vec2 resolution;',
+      'uniform float time;',
+      'void main(void){',
+      '  vec2 uv=(gl_FragCoord.xy*2.0-resolution.xy)/min(resolution.x,resolution.y);',
+      '  float t=time*0.04;',
+      '  float lw=0.0025;',
+      '  vec3 col=vec3(0.0);',
+      '  for(int j=0;j<3;j++){',
+      '    for(int i=0;i<6;i++){',
+      '      float fi=float(i); float fj=float(j);',
+      '      col[j]+=lw*fi*fi/abs(fract(t-0.012*fj+fi*0.012)*5.5-length(uv)+mod(uv.x+uv.y,0.22));',
+      '    }',
+      '  }',
+      '  col.r=col.r*1.6+col.g*0.2;',
+      '  col.g=col.g*0.45;',
+      '  col.b=col.b*0.15;',
+      '  gl_FragColor=vec4(col,1.0);',
+      '}'
+    ].join('\n')
+  });
+
+  var mesh = new THREE.Mesh(geometry, material);
+  scene.add(mesh);
+
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false });
+
+  function resizeShader() {
+    var overlay = document.getElementById('login-overlay');
+    if (!overlay) return;
+    var w = overlay.clientWidth || window.innerWidth;
+    var h = overlay.clientHeight || window.innerHeight;
+    renderer.setSize(w, h);
+    uniforms.resolution.value.set(renderer.domElement.width, renderer.domElement.height);
+  }
+
+  resizeShader();
+  window.addEventListener('resize', resizeShader);
+
+  var shaderAnimId;
+  function animateShader() {
+    shaderAnimId = requestAnimationFrame(animateShader);
+    uniforms.time.value += 0.05;
+    renderer.render(scene, camera);
+  }
+  animateShader();
+
+  // Stop shader when overlay hidden (save GPU after login)
+  var overlay = document.getElementById('login-overlay');
+  if (overlay) {
+    var obs = new MutationObserver(function(muts) {
+      muts.forEach(function(m) {
+        if (overlay.style.display === 'none') {
+          cancelAnimationFrame(shaderAnimId);
+          obs.disconnect();
+        }
+      });
+    });
+    obs.observe(overlay, { attributes: true, attributeFilter: ['style', 'class'] });
+  }
+}
 
 // ══ EFECTO DE ROTACIÓN E INCLINACIÓN 3D PARA TARJETAS ══
 function init3DTilt(){
@@ -1532,7 +1821,7 @@ function saveHist(){localStorage.setItem('concilia_hist', JSON.stringify(ST.hist
 loadHist();
 
 // ══ NAVEGACIÓN ENTRE MÓDULOS ══
-var pageNames = {upload: 'Cargar archivos', hist: 'Historial acumulado', dash: 'Dashboard ejecutivo', tbl: 'Detalle de registros', bancard: 'Auditoría Contable / Bancard'};
+var pageNames = {home: 'Inicio', upload: 'Cargar archivos', hist: 'Historial acumulado', dash: 'Dashboard ejecutivo', tbl: 'Detalle de registros', bancard: 'Auditoría Contable / Bancard'};
 function goTo(name, el){
   document.querySelectorAll('.scr').forEach(function(s){ s.classList.remove('on'); });
   document.querySelectorAll('.sb-item').forEach(function(b){ b.classList.remove('on'); });
@@ -2645,6 +2934,51 @@ function importBackup(input){
 // Inicialización de vistas
 renderHist();
 renderBancardHist();
+
+// ══ HOME STATS — suma historial acumulado ══
+function renderHomeStats() {
+  var history = ST.history || [];
+  var totalSessions = history.length;
+  var totalTxns = 0;
+  var matchRates = [];
+  var totalDesvios = 0;
+
+  history.forEach(function(day) {
+    if (day.rows) {
+      totalTxns += day.rows.length;
+      var ok = day.rows.filter(function(r){ return r.match_status === 'OK'; }).length;
+      if (day.rows.length > 0) matchRates.push((ok / day.rows.length) * 100);
+      var dev = day.rows.filter(function(r){ return r.match_status !== 'OK'; }).length;
+      totalDesvios += dev;
+    }
+  });
+
+  var avgMatch = matchRates.length > 0
+    ? (matchRates.reduce(function(a,b){return a+b;},0) / matchRates.length).toFixed(1) + '%'
+    : '—';
+
+  document.getElementById('hm-sessions').textContent = totalSessions;
+  document.getElementById('hm-match').textContent = avgMatch;
+  document.getElementById('hm-txns').textContent = totalTxns.toLocaleString('es-PY');
+  document.getElementById('hm-desvios').textContent = totalDesvios.toLocaleString('es-PY');
+
+  // Render recent list
+  var container = document.getElementById('home-recent-list');
+  if (!container) return;
+  if (history.length === 0) {
+    container.innerHTML = '<div class="home-empty-state"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;margin-bottom:12px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><div style="color:var(--tx3);font-size:13px;">No hay conciliaciones aún. Inicia tu primera sesión.</div><button class="act-btn primary" style="margin-top:16px;font-size:12px;padding:8px 18px" onclick="goTo(\'upload\', document.querySelectorAll(\'.sb-item\')[1])">Empezar ahora</button></div>';
+    return;
+  }
+  var recent = history.slice(0, 5);
+  container.innerHTML = recent.map(function(day) {
+    var ok = day.rows ? day.rows.filter(function(r){return r.match_status==='OK';}).length : 0;
+    var total = day.rows ? day.rows.length : 0;
+    var pct = total > 0 ? ((ok/total)*100).toFixed(1)+'%' : '—';
+    var color = ok/total > 0.9 ? 'var(--teal)' : ok/total > 0.7 ? 'var(--amber)' : 'var(--red)';
+    var bgColor = ok/total > 0.9 ? 'var(--tealb)' : ok/total > 0.7 ? 'var(--amberb)' : 'var(--redb)';
+    return '<div class="home-recent-item"><div class="home-ri-dot" style="background:'+color+'"></div><div><div class="home-ri-name">'+day.date+'</div><div class="home-ri-meta">'+total+' transacciones · '+(day.proc||'Infonet')+'</div></div><div class="home-ri-badge" style="background:'+bgColor+';color:'+color+'">'+pct+'</div></div>';
+  }).join('');
+}
 </script>
 <script>
 // ═════════════════════════════════════════════════════════════════════
