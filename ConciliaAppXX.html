@@ -1953,8 +1953,8 @@ function checkRun(){
 
 // Auxiliares de formato
 function num(v){ if(v === '' || v == null) return 0; var n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n; }
-function fmt(n){  var v=Math.round(Math.abs(n||0)); return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
-function fmt2(n){ var v=Math.round(n||0);          return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+function fmt(n){  var v=Math.round(Math.abs(n||0)); return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
+function fmt2(n){ var v=Math.round(n||0);          return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
 function pct(a, b){ return b ? (a / b * 100).toFixed(1) + '%' : '0.0%'; }
 function netelId(raw){
   var s = String(raw).trim(); if(s.length <= 7) return s;
@@ -2317,14 +2317,14 @@ function renderHist(){
       has.p ? '<span class="dpill dp2">Pronet</span>' : ''
     ].join('');
     
-    var dt = diffs.length === 0 ? '✓ Cuadrado perfecto' : fmt2(diffs.length) + ' desviaciones · Gs.' + fmt(monto);
+    var dt = diffs.length === 0 ? '✓ Cuadrado perfecto' : fmt2(diffs.length) + ' desviaciones · Gs. ' + fmt(monto);
     var SN = ['infonet','netel','pronet'];
     var SL = ['Infonet','Netel','Pronet'];
     var mr = SN.map(function(s,j){
       var sr = rows.filter(function(r){ return r.sistema === s; }); if(!sr.length) return '';
       var sd = sr.filter(function(r){ return Math.abs(r.diff) > 0.5; });
       var sm = sd.reduce(function(a,r){ return a + Math.abs(r.diff); }, 0);
-      return '<tr><td style="color:var(--tx);font-weight:600">'+SL[j]+'</td><td>'+fmt2(sr.length)+'</td><td style="color:var(--teal)">'+fmt2(sr.length-sd.length)+'</td><td style="color:'+(sd.length?'var(--red)':'var(--teal)')+'">'+fmt2(sd.length)+'</td><td style="color:var(--amber)">Gs.'+fmt(sm)+'</td></tr>';
+      return '<tr><td style="color:var(--tx);font-weight:600">'+SL[j]+'</td><td>'+fmt2(sr.length)+'</td><td style="color:var(--teal)">'+fmt2(sr.length-sd.length)+'</td><td style="color:'+(sd.length?'var(--red)':'var(--teal)')+'">'+fmt2(sd.length)+'</td><td style="color:var(--amber)">Gs. '+fmt(sm)+'</td></tr>';
     }).join('');
     
     return '<div class="dc">'+
@@ -2380,7 +2380,7 @@ function renderDash(rows){
     {icon:'📊', label:'Volumen Mapeado', val:fmt2(rows.length), sub:'Transacciones procesadas', c:'var(--primary)'},
     {icon:'✓', label:'Cruces Correctos', val:fmt2(ok.length), sub:pct(ok.length,rows.length)+' tasa de exactitud', cls:'vg', c:'var(--teal)'},
     {icon:'⚠', label:'Casos de Diferencia', val:fmt2(diffs.length), sub:pct(diffs.length,rows.length)+' tasa de desvío', cls:'vr', c:'var(--red)'},
-    {icon:'💰', label:'Importe Desviado', val:'Gs.'+fmt(monto), sub:'Valor expuesto en conflicto', cls:'va', c:'var(--amber)'}
+    {icon:'💰', label:'Importe Desviado', val:'Gs. '+fmt(monto), sub:'Valor expuesto en conflicto', cls:'va', c:'var(--amber)'}
   ].map(function(m){
     return '<div class="mc card-tilt"><div class="mc-glow-spot" style="background:'+m.c+'"></div><div class="mc-icon" style="color:'+m.c+'">'+m.icon+'</div><div class="mc-lbl">'+m.label+'</div><div class="mc-val '+m.cls+'">'+m.val+'</div><div class="mc-sub">'+m.sub+'</div></div>';
   }).join('');
@@ -2399,7 +2399,7 @@ function renderDash(rows){
         '<div class="sp-row"><span class="spk">Mapeadas</span><span class="spv">'+fmt2(sr.length)+'</span></div>'+
         '<div class="sp-row"><span class="spk">Cruce Perfecto</span><span class="spv" style="color:var(--teal)">'+fmt2(sr.length-sd.length)+'</span></div>'+
         '<div class="sp-row"><span class="spk">Desviadas</span><span class="spv" style="color:var(--red)">'+fmt2(sd.length)+'</span></div>'+
-        '<div class="sp-row"><span class="spk">Riesgo Financiero</span><span class="spv" style="color:var(--amber)">Gs.'+fmt(sm)+'</span></div>'+
+        '<div class="sp-row"><span class="spk">Riesgo Financiero</span><span class="spv" style="color:var(--amber)">Gs. '+fmt(sm)+'</span></div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -2495,7 +2495,7 @@ function renderTbl(){
     var el = (e||'').toLowerCase();
     return el==='aprobado' ? '<span class="badge bap">Aprobado</span>' : el==='reversado' ? '<span class="badge bre">Reversado</span>' : el==='anulado' ? '<span class="badge ban">Anulado</span>' : el==='confirmado' ? '<span class="badge bco">Confirmado</span>' : '<span class="badge bx">Otro</span>';
   }
-  function dC(d){ if(Math.abs(d) <= 0.5) return '<span class="dze">-</span>'; return '<span class="'+(d>0?'dpos':'dneg')+'">'+(d>0?'+':'-')+'Gs.'+fmt(d)+'</span>'; }
+  function dC(d){ if(Math.abs(d) <= 0.5) return '<span class="dze">-</span>'; return '<span class="'+(d>0?'dpos':'dneg')+'">'+(d>0?'+':'-')+'Gs. '+fmt(d)+'</span>'; }
   
   var tb = document.getElementById('tbl-body');
   if(!sl.length){ tb.innerHTML = '<tr><td colspan="10" class="empty-tbl">Ningún registro coincide con los filtros establecidos.</td></tr>'; return; }
@@ -2880,9 +2880,9 @@ function renderBancardTbl(){
       '<td><span class="badge '+(r.tipo==='DEBE'?'bco':'bi')+'">'+r.tipo+'</span></td>'+
       '<td class="mono">'+r.fechaPdf+'</td>'+
       '<td class="mono">'+r.referencia+'</td>'+
-      '<td class="mono" style="text-align:right;color:var(--tx)">Gs.'+fmt(r.importePdf)+'</td>'+
+      '<td class="mono" style="text-align:right;color:var(--tx)">Gs. '+fmt(r.importePdf)+'</td>'+
       '<td class="mono">'+(r.fechaMayor || '<span style="color:var(--tx3)">-</span>')+'</td>'+
-      '<td class="mono" style="text-align:right;">'+(r.importeMayor!=null?'Gs.'+fmt(r.importeMayor):'<span style="color:var(--tx3)">-</span>')+'</td>'+
+      '<td class="mono" style="text-align:right;">'+(r.importeMayor!=null?'Gs. '+fmt(r.importeMayor):'<span style="color:var(--tx3)">-</span>')+'</td>'+
       '<td class="mono" style="text-align:right">'+dCell(r.diff, r.estado)+'</td>'+
       '<td>'+eBadge(r.estado)+'</td>'+
       '<td style="font-size:11.5px;color:var(--tx3); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">'+(r.comentarioMayor||'-')+'</td>'+
