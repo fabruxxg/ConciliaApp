@@ -282,7 +282,10 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
 async def servir_dashboard():
     nombre_archivo = "ConciliaAppXX.html"
     with open(nombre_archivo, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+        return HTMLResponse(
+            content=f.read(),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+        )
 
 
 @app.get("/v1/reconciliations/history")
