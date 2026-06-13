@@ -3305,7 +3305,7 @@ function ejecutarSimulacionLocal(setP) {
             var p = Math.min((ts - startTime) / duration, 1);
             var ease = 1 - Math.pow(1 - p, 3);
             var cur = start + (num - start) * ease;
-            el.textContent = prefix + (Number.isInteger(num) ? Math.round(cur).toLocaleString('es-PY') : cur.toFixed(2)) + suffix;
+            el.textContent = prefix + Math.round(cur).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ') + suffix;
             if (p < 1) requestAnimationFrame(step);
           }
           requestAnimationFrame(step);
