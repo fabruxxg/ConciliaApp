@@ -1953,8 +1953,8 @@ function checkRun(){
 
 // Auxiliares de formato
 function num(v){ if(v === '' || v == null) return 0; var n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n; }
-function fmt(n){ return new Intl.NumberFormat('es-PY',{maximumFractionDigits:0}).format(Math.round(Math.abs(n))); }
-function fmt2(n){ return new Intl.NumberFormat('es-PY',{maximumFractionDigits:0}).format(Math.round(n)); }
+function fmt(n){  var v=Math.round(Math.abs(n||0)); return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+function fmt2(n){ var v=Math.round(n||0);          return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
 function pct(a, b){ return b ? (a / b * 100).toFixed(1) + '%' : '0.0%'; }
 function netelId(raw){
   var s = String(raw).trim(); if(s.length <= 7) return s;
