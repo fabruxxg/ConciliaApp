@@ -1,10 +1,11 @@
 import io
 import uuid
 import jwt
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Any
 import pandas as pd
-from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -287,8 +288,45 @@ async def servir_dashboard():
 @app.get("/v1/reconciliations/history")
 async def obtener_historial(current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
-        statement = select(ReconciliationHistory).where(
-            ReconciliationHistory.user_email == current_user.email
+        statement = (
+            select(ReconciliationHistory)
+            .where(ReconciliationHistory.user_email == current_user.email)
+            .order_by(ReconciliationHistory.fecha_ejecucion.desc())
         )
         resultados = session.exec(statement).all()
-        return resultados
+        out = []
+        for r in resultados:
+            try:
+                data = json.loads(r.resumen_json)
+            except Exception:
+                data = {}
+            out.append({"cloud_id": r.id, "fecha_ejecucion": r.fecha_ejecucion.isoformat(), **data})
+        return out
+
+
+@app.post("/v1/history/save")
+async def guardar_historial(request: Request, current_user: User = Depends(get_current_user)):
+    body = await request.json()
+    with Session(engine) as session:
+        entrada = ReconciliationHistory(
+            user_email=current_user.email,
+            resumen_json=json.dumps(body, ensure_ascii=False),
+            empresa="SmartMatch"
+        )
+        session.add(entrada)
+        session.commit()
+        session.refresh(entrada)
+        return {"cloud_id": entrada.id, "status": "saved"}
+
+
+@app.delete("/v1/history/{entry_id}")
+async def eliminar_historial(entry_id: int, current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        entrada = session.get(ReconciliationHistory, entry_id)
+        if not entrada:
+            raise HTTPException(status_code=404, detail="Entrada no encontrada")
+        if entrada.user_email != current_user.email:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        session.delete(entrada)
+        session.commit()
+        return {"status": "deleted"}

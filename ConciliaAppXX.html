@@ -1730,9 +1730,70 @@ function showToast(msg){
 
 // ══ ESTADOS GLOBALES ══
 var ST = {files: {}, rows: [], filtered: [], page: 1, perPage: 50, charts: {}, history: []};
+var API_BASE = 'https://conciliaapp-production.up.railway.app';
+function apiToken(){ return localStorage.getItem('token') || ''; }
+
 function loadHist(){try{ST.history = JSON.parse(localStorage.getItem('concilia_hist') || '[]');}catch(e){ST.history = [];}}
 function saveHist(){localStorage.setItem('concilia_hist', JSON.stringify(ST.history));}
 loadHist();
+
+// ══ SINCRONIZACIÓN NUBE — CARGA AL LOGIN ══
+async function cargarHistorialNube() {
+  var token = apiToken();
+  if (!token) return;
+  try {
+    var res = await fetch(API_BASE + '/v1/reconciliations/history', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    var data = await res.json();
+    if (!Array.isArray(data) || !data.length) return;
+
+    // Merge: evita duplicados por timestamp
+    var localTs = new Set(ST.history.map(function(h){ return String(h.ts); }));
+    var nuevas = data.filter(function(d){ return d.rows && d.rows.length && !localTs.has(String(d.ts)); });
+
+    if (nuevas.length) {
+      ST.history = ST.history.concat(nuevas);
+      ST.history.sort(function(a,b){ return (b.ts||0) - (a.ts||0); });
+      saveHist();
+      renderHist();
+      if (typeof renderHomeStats === 'function') renderHomeStats();
+      showToast('☁ ' + nuevas.length + ' sesión(es) sincronizadas desde la nube');
+    }
+  } catch(e) { console.log('[sync load]', e); }
+}
+
+// ══ SINCRONIZACIÓN NUBE — GUARDA DESPUÉS DE CONCILIAR ══
+async function guardarSesionNube(entry) {
+  var token = apiToken();
+  if (!token) return;
+  try {
+    var res = await fetch(API_BASE + '/v1/history/save', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    });
+    if (res.ok) {
+      var data = await res.json();
+      // Guardamos cloud_id en la entrada local para poder borrarla luego
+      entry.cloud_id = data.cloud_id;
+      saveHist();
+    }
+  } catch(e) { console.log('[sync save]', e); }
+}
+
+// ══ SINCRONIZACIÓN NUBE — BORRA ENTRADA ══
+async function borrarSesionNube(cloudId) {
+  var token = apiToken();
+  if (!token || !cloudId) return;
+  try {
+    await fetch(API_BASE + '/v1/history/' + cloudId, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+  } catch(e) { console.log('[sync delete]', e); }
+}
 
 // ══ NAVEGACIÓN ENTRE MÓDULOS ══
 var pageNames = {home: 'Inicio', upload: 'Cargar archivos', hist: 'Historial acumulado', dash: 'Dashboard ejecutivo', tbl: 'Detalle de registros', bancard: 'Auditoría Contable / Bancard'};
@@ -1772,7 +1833,7 @@ function checkRun(){
 function num(v){ if(v === '' || v == null) return 0; var n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n; }
 function fmt(n){ return new Intl.NumberFormat('es-PY').format(Math.round(Math.abs(n))); }
 function fmt2(n){ return new Intl.NumberFormat('es-PY').format(n); }
-function pct(a, b){ return b ? Math.round(a / b * 100) + '%' : '0%'; }
+function pct(a, b){ return b ? (a / b * 100).toFixed(1) + '%' : '0.0%'; }
 function netelId(raw){
   var s = String(raw).trim(); if(s.length <= 7) return s;
   var n = s.startsWith('1') ? s.slice(1) : s;
@@ -2074,12 +2135,14 @@ function runConcil(){
         }
       }
       
-      setP(95, 'Archivando histórico local corporativo...');
+      setP(95, 'Archivando histórico corporativo...');
       var idx = ST.history.findIndex(function(h){ return h.date === today; });
       var entry = {date: today, ts: Date.now(), rows: ST.rows};
-      if(idx >= 0) ST.history[idx] = entry; else ST.history.unshift(entry);
+      if(idx >= 0) { entry.cloud_id = ST.history[idx].cloud_id; ST.history[idx] = entry; }
+      else ST.history.unshift(entry);
       ST.history.sort(function(a,b){ return b.ts - a.ts; });
       saveHist();
+      guardarSesionNube(entry); // sync a Railway en segundo plano
       
       setP(100, 'Motor sincronizado de manera exitosa');
       setTimeout(function(){
@@ -2107,11 +2170,12 @@ function renderHist(){
   var tm = td.reduce(function(a,r){ return a + Math.abs(r.diff); }, 0);
   
   sumEl.style.display = 'block';
+  var okAll = all.filter(function(r){ return Math.abs(r.diff) <= 0.5; });
   document.getElementById('hist-metrics').innerHTML = [
-    {icon:'📅', label:'Periodos', val:ST.history.length, sub:'Días procesados', c:'var(--primary)'},
-    {icon:'📋', label:'Volumen Total', val:fmt2(all.length), sub:'Transacciones', c:'var(--teal)'},
-    {icon:'⚠', label:'Desviaciones', val:fmt2(td.length), sub:pct(td.length,all.length)+' del total', cls:'vr', c:'var(--red)'},
-    {icon:'💰', label:'Impacto Acumulado', val:'Gs. ' + fmt(tm), sub:'Valor expuesto', cls:'va', c:'var(--amber)'}
+    {icon:'📅', label:'Periodos',         val:fmt2(ST.history.length), sub:'Días procesados',              cls:'',   c:'var(--primary)'},
+    {icon:'📋', label:'Volumen Total',    val:fmt2(all.length),         sub:fmt2(okAll.length)+' correctos', cls:'vg', c:'var(--teal)'},
+    {icon:'⚠',  label:'Desviaciones',    val:fmt2(td.length),          sub:pct(td.length,all.length)+' del total', cls:'vr', c:'var(--red)'},
+    {icon:'💰', label:'Impacto Acumulado',val:'Gs. '+fmt(tm),           sub:'Valor expuesto en desvíos',   cls:'va', c:'var(--amber)'}
   ].map(function(m){
     return '<div class="mc card-tilt"><div class="mc-glow-spot" style="background:'+m.c+'"></div><div class="mc-icon" style="color:'+m.c+'">'+m.icon+'</div><div class="mc-lbl">'+m.label+'</div><div class="mc-val '+m.cls+'">'+m.val+'</div><div class="mc-sub">'+m.sub+'</div></div>';
   }).join('');
@@ -2164,7 +2228,13 @@ function exportDay(i){ var h = ST.history[i]; exportRowsXlsx(h.rows, 'conciliaci
 function delDay(i){
   customConfirm('Confirmar purga', '¿Desea eliminar de forma permanente este registro de auditoría diaria?').then(function(confirmed) {
     if (confirmed) {
-      ST.history.splice(i,1); saveHist(); renderHist(); showToast('Historial diario depurado');
+      var cloudId = ST.history[i] && ST.history[i].cloud_id;
+      ST.history.splice(i,1);
+      saveHist();
+      renderHist();
+      if (typeof renderHomeStats === 'function') renderHomeStats();
+      if (cloudId) borrarSesionNube(cloudId);
+      showToast('Historial diario depurado');
     }
   });
 }
