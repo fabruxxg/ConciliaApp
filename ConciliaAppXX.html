@@ -11,6 +11,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- Librería 3D para renderizar el fondo de partículas interconectadas interactivo -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- GSAP + ScrollTrigger para animaciones 21st.dev -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <style>
 /* ══════════════════════════════════════
    DESIGN TOKENS — DARK (Obsidiana Cobriza / Corporativo Naranja)
@@ -655,15 +658,167 @@ tbody tr.has-diff td{background:var(--amberb);}
   box-shadow: 0 12px 30px -8px rgba(249, 115, 22, 0.7);
 }
 
-/* 🌟 ANIMACIÓN DE INMERSIÓN AL ENTRAR AL SISTEMA */
+/* ANIMACIÓN DE INMERSIÓN AL ENTRAR AL SISTEMA */
 .login-exit-animation {
   animation: inmersiones3D 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  pointer-events: none; 
+  pointer-events: none;
 }
 @keyframes inmersiones3D {
   0% { opacity: 1; transform: scale(1); filter: blur(0px); }
   100% { opacity: 0; transform: scale(1.15) translateY(-20px); filter: blur(10px); visibility: hidden; }
 }
+
+/* ══════════════════════════════════════
+   LOGIN HERO — HIGGSFIELD BACKGROUND
+══════════════════════════════════════ */
+#login-overlay {
+  background-image: url('https://d8j0ntlcm91z4.cloudfront.net/user_3F2CJDW3Ml3FTkI7qCdow9rVBJT/hf_20260613_114436_575b2257-bd81-4494-8060-4479050e89a8.png') !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+#login-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 7, 3, 0.72);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+}
+#login-overlay > * { position: relative; z-index: 1; }
+
+.login-logo-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  object-fit: cover;
+  margin: 0 auto 1rem;
+  display: block;
+  box-shadow: 0 0 30px rgba(249,115,22,0.45), 0 8px 24px rgba(0,0,0,0.6);
+  border: 1px solid rgba(249,115,22,0.4);
+  animation: logoFloat 3s ease-in-out infinite;
+}
+@keyframes logoFloat {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+/* ══════════════════════════════════════
+   SCROLL ANIMATIONS — 21st.dev style
+══════════════════════════════════════ */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.08s; }
+.reveal-delay-2 { transition-delay: 0.16s; }
+.reveal-delay-3 { transition-delay: 0.24s; }
+.reveal-delay-4 { transition-delay: 0.32s; }
+
+/* Stagger for grids */
+.sys-grid .sys-card:nth-child(1) { transition-delay: 0s; }
+.sys-grid .sys-card:nth-child(2) { transition-delay: 0.1s; }
+.sys-grid .sys-card:nth-child(3) { transition-delay: 0.2s; }
+.metrics .mc:nth-child(1) { transition-delay: 0s; }
+.metrics .mc:nth-child(2) { transition-delay: 0.08s; }
+.metrics .mc:nth-child(3) { transition-delay: 0.16s; }
+.metrics .mc:nth-child(4) { transition-delay: 0.24s; }
+
+/* ══ SIDEBAR SVG ICONS ══ */
+.sb-icon svg {
+  width: 18px; height: 18px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  vertical-align: middle;
+  transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+}
+.sb-item:hover .sb-icon svg,
+.sb-item.on .sb-icon svg {
+  transform: scale(1.18);
+}
+
+/* ══ MODERN INFO PILLS (reemplaza emoji clásico) ══ */
+.info-pill-icon svg {
+  width: 20px; height: 20px;
+  stroke: var(--primary); fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0; margin-top: 1px;
+}
+.demo-banner-icon svg {
+  width: 18px; height: 18px;
+  stroke: var(--primary); fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ══ COUNTER ANIMATION ══ */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.mc-val.animate { animation: countUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* ══ PROGRESS BAR SHIMMER ══ */
+.prog-fill {
+  background: linear-gradient(90deg, var(--primary), var(--teal), var(--amber), var(--primary));
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ══ TOPBAR GLASS REFINEMENT ══ */
+.topbar {
+  border-bottom: 1px solid var(--border2) !important;
+}
+
+/* ══ PAGE ENTRY ANIMATION ══ */
+.scr.on {
+  animation: pageReveal 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+@keyframes pageReveal {
+  from { opacity: 0; transform: perspective(900px) rotateX(3deg) translateY(18px); }
+  to   { opacity: 1; transform: perspective(900px) rotateX(0) translateY(0); }
+}
+
+/* ══ CARD 3D DEPTH HOVER ══ */
+.sys-card:hover, .mc:hover, .cc:hover {
+  transform: translateY(-4px) perspective(600px) rotateX(1deg) !important;
+}
+
+/* ══ SLOT BTN MODERN UPLOAD ══ */
+.slot-btn {
+  position: relative;
+  overflow: hidden;
+}
+.slot-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(249,115,22,0.15), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.slot-btn:hover::after { opacity: 1; }
+
+/* ══ BADGE PULSE for active states ══ */
+.sb-item.on::before {
+  content: '';
+  position: absolute;
+  right: 14px; top: 50%; transform: translateY(-50%);
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.7;
+  animation: pulse 2s infinite;
+}
+.sb-item { position: relative; }
 </style>
 </head>
 <body>
@@ -675,15 +830,17 @@ tbody tr.has-diff td{background:var(--amberb);}
 <div id="login-overlay" style="position: fixed; inset: 0; background: rgba(19, 10, 5, 0.85); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;">
   
   <div class="login-glass-card">
-    <div style="font-size: 32px; font-weight: 800; color: #fefbf9; margin-bottom: 8px; letter-spacing: -0.5px;">
+    <img src="https://d8j0ntlcm91z4.cloudfront.net/user_3F2CJDW3Ml3FTkI7qCdow9rVBJT/hf_20260613_114434_72d7b9e3-263f-4fb5-8ed4-590f38c0c26c.png" class="login-logo-img" alt="ConciliaApp">
+    <div style="font-size: 30px; font-weight: 800; color: #fefbf9; margin-bottom: 6px; letter-spacing: -0.8px;">
       Concilia<span style="color: #f97316;">App</span>
     </div>
-    <div style="font-size: 14px; color: #cbb8ae; margin-bottom: 32px; font-weight: 500;">
+    <div style="font-size: 13px; color: #cbb8ae; margin-bottom: 32px; font-weight: 500; letter-spacing: 0.3px;">
       Motor de Inteligencia Financiera
     </div>
 
     <div id="login-error-msg" style="display: none; background: rgba(244, 63, 94, 0.1); border: 1px solid #f43f5e; color: #f43f5e; font-size: 13px; padding: 10px; border-radius: 8px; margin-bottom: 20px; text-align: left; font-weight: 600;">
-      ⚠ Credenciales inválidas. Intente de nuevo.
+      <svg style="display:inline;width:14px;height:14px;stroke:#f43f5e;fill:none;stroke-width:2;vertical-align:-2px;margin-right:6px" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      Credenciales inválidas. Intente de nuevo.
     </div>
 
     <form id="login-form">
@@ -784,43 +941,43 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     <div class="sb-section">Módulos</div>
     <nav class="sb-nav">
       <div class="sb-item on" onclick="goTo('upload',this)">
-        <span class="sb-icon">⇡</span><span>Cargar archivos</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span><span>Cargar archivos</span>
       </div>
       <div class="sb-item" onclick="goTo('hist',this)">
-        <span class="sb-icon">⏰</span><span>Histórico</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><span>Histórico</span>
       </div>
       <div class="sb-item" onclick="goTo('dash',this)">
-        <span class="sb-icon">📊</span><span>Dashboard</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span><span>Dashboard</span>
       </div>
       <div class="sb-item" onclick="goTo('tbl',this)">
-        <span class="sb-icon">☰</span><span>Detalle transacciones</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span><span>Detalle transacciones</span>
       </div>
     </nav>
 
     <div class="sb-section">Auditoría Especial</div>
     <nav class="sb-nav" style="flex:0">
       <div class="sb-item" onclick="goTo('bancard',this)">
-        <span class="sb-icon">🏦</span><span>Libro Mayor vs Bancard</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 10l9-7 9 7"/><line x1="9" y1="21" x2="9" y2="13"/><line x1="15" y1="21" x2="15" y2="13"/></svg></span><span>Libro Mayor vs Bancard</span>
       </div>
     </nav>
 
     <div class="sb-section">Exportación</div>
     <nav class="sb-nav" style="flex:0">
       <div class="sb-item" onclick="exportHistExcel()">
-        <span class="sb-icon">📥</span><span>Acumulado Histórico</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span>Acumulado Histórico</span>
       </div>
       <div class="sb-item" onclick="exportXlsx()">
-        <span class="sb-icon">📥</span><span>Detalle Vista Actual</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><span>Detalle Vista Actual</span>
       </div>
     </nav>
 
     <div class="sb-section">Sincronización</div>
     <nav class="sb-nav" style="flex:0">
       <div class="sb-item" onclick="exportBackup()">
-        <span class="sb-icon">💾</span><span>Exportar Respaldo</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span><span>Exportar Respaldo</span>
       </div>
       <div class="sb-item" onclick="document.getElementById('f-import-bk').click()">
-        <span class="sb-icon">📂</span><span>Importar Respaldo</span>
+        <span class="sb-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9 14 12 17 15 14"/></svg></span><span>Importar Respaldo</span>
       </div>
       <input type="file" id="f-import-bk" accept=".json" style="display:none" onchange="importBackup(this)">
     </nav>
@@ -851,16 +1008,16 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
 
   <!-- PANTALLA CARGAR ARCHIVOS -->
   <div class="scr on" id="scr-upload">
-    <div class="upload-hero">
+    <div class="upload-hero reveal">
       <div class="hero-eyebrow">Motor de Procesamiento Financiero</div>
       <div class="hero-title">Conciliaciones <span class="grad">Inteligentes</span></div>
       <div class="hero-sub">Sube tus extractos mensuales de portales y cobranzas. Nuestra arquitectura de datos cruzará las referencias de forma automatizada.</div>
     </div>
 
     <!-- BANNER DE DATOS DEMO -->
-    <div class="demo-banner">
+    <div class="demo-banner reveal reveal-delay-1">
       <div class="demo-txt">
-        👉 <strong>¿No dispones de archivos reales en este momento?</strong><br>
+        <svg class="demo-banner-icon" style="display:inline;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><strong>¿No dispones de archivos reales en este momento?</strong><br>
         Usa nuestro Generador Inteligente de Datos de Prueba para evaluar el sistema completo al instante.
       </div>
       <div class="demo-btn-container">
@@ -868,14 +1025,14 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       </div>
     </div>
     
-    <div class="info-pill">
-      <span class="info-pill-icon">💡</span>
+    <div class="info-pill reveal reveal-delay-2">
+      <span class="info-pill-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
       <span>El sistema detecta automáticamente transacciones anteriores. Puedes alimentar el histórico día con día sin temor a duplicar registros ni corromper información existente.</span>
     </div>
 
     <div class="sys-grid">
       <!-- Infonet Card -->
-      <div class="sys-card card-tilt" id="card-infonet">
+      <div class="sys-card card-tilt reveal" id="card-infonet">
         <div class="sc-hd">
           <div class="sc-num">ARCHIVOS — INFONET</div>
           <div class="sc-title">Infonet</div>
@@ -888,7 +1045,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       </div>
       
       <!-- Netel Card -->
-      <div class="sys-card card-tilt" id="card-netel">
+      <div class="sys-card card-tilt reveal reveal-delay-1" id="card-netel">
         <div class="sc-hd">
           <div class="sc-num">ARCHIVOS — NETEL</div>
           <div class="sc-title">Netel / Pago Express</div>
@@ -901,7 +1058,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       </div>
       
       <!-- Pronet Card -->
-      <div class="sys-card card-tilt" id="card-pronet">
+      <div class="sys-card card-tilt reveal reveal-delay-2" id="card-pronet">
         <div class="sc-hd">
           <div class="sc-num">ARCHIVOS — PRONET</div>
           <div class="sc-title">Pronet / Sudameris</div>
@@ -1007,7 +1164,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     <!-- BANNER DE DATOS DEMO BANCARD -->
     <div class="demo-banner">
       <div class="demo-txt">
-        👉 <strong>Prueba la Auditoría Bancard al instante</strong> con datos ficticios realistas de Tesorería, Contabilidad y Extractos bancarios paraguayos.
+        <svg class="demo-banner-icon" style="display:inline;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><strong>Prueba la Auditoría Bancard al instante</strong> con datos ficticios realistas de Tesorería, Contabilidad y Extractos bancarios paraguayos.
       </div>
       <div class="demo-btn-container">
         <button class="act-btn primary" onclick="injectBancardMockAndRun()">Generar Auditoría Demo</button>
@@ -2603,6 +2760,160 @@ function ejecutarSimulacionLocal(setP) {
 }
 
 // Autenticación inicial automática al abrir el dashboard
+</script>
+
+<!-- ══ ANIMACIONES 21st.dev — GSAP + IntersectionObserver + 3D Tilt ══ -->
+<script>
+(function() {
+  // ── 1. INTERSECTION OBSERVER para .reveal ──
+  var io = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+  function attachReveal() {
+    document.querySelectorAll('.reveal').forEach(function(el) {
+      io.observe(el);
+    });
+  }
+  attachReveal();
+
+  // Re-attach when switching screens
+  var origGoTo = window.goTo;
+  window.goTo = function(id, el) {
+    if (origGoTo) origGoTo(id, el);
+    setTimeout(attachReveal, 80);
+  };
+
+  // ── 2. GSAP — animar métricas al mostrarse ──
+  function animateMetrics() {
+    if (typeof gsap === 'undefined') return;
+    gsap.utils.toArray('.mc-val').forEach(function(el, i) {
+      gsap.fromTo(el,
+        { opacity: 0, y: 14, scale: 0.92 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.55,
+          delay: i * 0.08, ease: 'back.out(1.4)',
+          scrollTrigger: { trigger: el, start: 'top 90%', once: true }
+        }
+      );
+    });
+  }
+  if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
+    gsap.registerPlugin(ScrollTrigger);
+    animateMetrics();
+  }
+
+  // ── 3. 3D TILT en .card-tilt ──
+  document.addEventListener('mousemove', function(e) {
+    document.querySelectorAll('.card-tilt').forEach(function(card) {
+      var r = card.getBoundingClientRect();
+      if (e.clientX < r.left - 60 || e.clientX > r.right + 60 ||
+          e.clientY < r.top  - 60 || e.clientY > r.bottom + 60) return;
+      var cx = r.left + r.width  / 2;
+      var cy = r.top  + r.height / 2;
+      var dx = (e.clientX - cx) / (r.width  / 2);
+      var dy = (e.clientY - cy) / (r.height / 2);
+      card.style.transform = 'perspective(700px) rotateY(' + (dx * 5) + 'deg) rotateX(' + (-dy * 4) + 'deg) translateZ(4px)';
+      card.style.transition = 'transform 0.08s ease';
+    });
+  });
+  document.addEventListener('mouseleave', function() {
+    document.querySelectorAll('.card-tilt').forEach(function(card) {
+      card.style.transform = '';
+      card.style.transition = 'transform 0.5s cubic-bezier(0.16,1,0.3,1)';
+    });
+  });
+  // Reset tilt on mouseout from each card
+  document.addEventListener('mouseout', function(e) {
+    var card = e.target.closest('.card-tilt');
+    if (card && !card.contains(e.relatedTarget)) {
+      card.style.transform = '';
+      card.style.transition = 'transform 0.5s cubic-bezier(0.16,1,0.3,1)';
+    }
+  });
+
+  // ── 4. SPOTLIGHT en slot-btn (mouse radial glow) ──
+  document.addEventListener('mousemove', function(e) {
+    document.querySelectorAll('.slot-btn').forEach(function(btn) {
+      var r = btn.getBoundingClientRect();
+      btn.style.setProperty('--mx', ((e.clientX - r.left) / r.width  * 100) + '%');
+      btn.style.setProperty('--my', ((e.clientY - r.top)  / r.height * 100) + '%');
+    });
+  });
+
+  // ── 5. COUNTER ANIMATION para mc-val al entrar en vista ──
+  var counterIO = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) {
+        var el = e.target;
+        var raw = el.textContent.trim();
+        var num = parseFloat(raw.replace(/[^0-9.]/g, ''));
+        if (!isNaN(num) && num > 0) {
+          var prefix = raw.match(/^[^0-9]*/)[0];
+          var suffix = raw.match(/[^0-9.]*$/)[0];
+          var start = 0; var duration = 900; var startTime = null;
+          el.classList.add('animate');
+          function step(ts) {
+            if (!startTime) startTime = ts;
+            var p = Math.min((ts - startTime) / duration, 1);
+            var ease = 1 - Math.pow(1 - p, 3);
+            var cur = start + (num - start) * ease;
+            el.textContent = prefix + (Number.isInteger(num) ? Math.round(cur).toLocaleString('es-PY') : cur.toFixed(2)) + suffix;
+            if (p < 1) requestAnimationFrame(step);
+          }
+          requestAnimationFrame(step);
+        }
+        counterIO.unobserve(el);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  function attachCounters() {
+    document.querySelectorAll('.mc-val').forEach(function(el) {
+      counterIO.observe(el);
+    });
+  }
+  attachCounters();
+
+  // Re-attach counters when dashboard renders
+  var origRenderDash = window.renderDash;
+  window.renderDash = function() {
+    if (origRenderDash) origRenderDash.apply(this, arguments);
+    setTimeout(function() { attachReveal(); attachCounters(); }, 50);
+  };
+
+  // ── 6. PAGE TRANSITION suave entre pantallas ──
+  var origGoTo2 = window.goTo;
+  window.goTo = function(id, el) {
+    var prev = document.querySelector('.scr.on');
+    if (prev) {
+      prev.style.opacity = '0';
+      prev.style.transform = 'perspective(900px) rotateX(-2deg) translateY(-10px)';
+      prev.style.transition = 'opacity 0.18s ease, transform 0.18s ease';
+    }
+    setTimeout(function() {
+      if (origGoTo2) origGoTo2(id, el);
+      var next = document.getElementById('scr-' + id);
+      if (next) {
+        next.style.opacity = '0';
+        next.style.transform = 'perspective(900px) rotateX(4deg) translateY(20px)';
+        next.style.transition = 'none';
+        requestAnimationFrame(function() {
+          next.style.transition = 'opacity 0.4s cubic-bezier(0.16,1,0.3,1), transform 0.4s cubic-bezier(0.16,1,0.3,1)';
+          next.style.opacity = '1';
+          next.style.transform = 'perspective(900px) rotateX(0) translateY(0)';
+        });
+      }
+      attachReveal();
+      attachCounters();
+    }, 150);
+  };
+
+})();
 </script>
 </body>
 </html>
