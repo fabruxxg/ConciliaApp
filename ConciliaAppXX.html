@@ -530,6 +530,8 @@ body{
 .pill.on.pr{background:var(--redb);color:var(--red);border-color:var(--red);}
 .pill.on.pan{background:var(--amberb);color:var(--amber);border-color:var(--amber);}
 .pill.on.pc{background:var(--primary-f);color:var(--primary);border-color:var(--primary);}
+.pill.on.pf{background:rgba(244,63,94,.15);color:var(--red);border-color:var(--red);}
+.pill.on.ps{background:rgba(251,191,36,.15);color:var(--amber);border-color:var(--amber);}
 .srch{
   padding:9px 16px;border-radius:10px;border:1px solid var(--border);
   background:var(--bg);font-size:13px;color:var(--tx);font-family:'Inter',sans-serif;
@@ -557,6 +559,11 @@ tbody tr.has-diff td{background:var(--amberb);}
 .bco{background:var(--primary-f);color:var(--primary);border: 1px solid var(--primary-b);}
 .bx{background:var(--bg4);color:var(--tx3);border: 1px solid var(--border);}
 .bi, .bn, .bp{background:var(--bg3);color:var(--tx);font-size:10px;font-weight:700;border: 1px solid var(--border);}
+.bca{background:rgba(20,184,166,.15);color:var(--teal);font-size:10px;font-weight:700;border:1px solid rgba(20,184,166,.25);}
+.bconcil{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.2);}
+.bfalt{background:rgba(244,63,94,.15);color:var(--red);border:1px solid rgba(244,63,94,.2);}
+.bsolo{background:rgba(251,191,36,.15);color:var(--amber);border:1px solid rgba(251,191,36,.2);}
+.bdif{background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.2);}
 .dpos{color:var(--primary);font-weight:700;font-family:'JetBrains Mono',monospace;}
 .dneg{color:var(--red);font-weight:700;font-family:'JetBrains Mono',monospace;}
 .dze{color:var(--tx3);font-family:'JetBrains Mono',monospace;}
@@ -1378,6 +1385,8 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
           <button class="pill" onclick="setF('pronet',this)">Pronet</button>
           <button class="pill" onclick="setF('compras',this)">Compras</button>
           <button class="pill" onclick="setF('diff',this)">⚠ Diferencias</button>
+          <button class="pill pf" onclick="setF('faltante',this)">Faltante Libro</button>
+          <button class="pill ps" onclick="setF('solobook',this)">Solo Libro</button>
           <button class="pill pa" onclick="setF('aprobado',this)">Aprobado</button>
           <button class="pill pr" onclick="setF('reversado',this)">Reversado</button>
           <button class="pill pan" onclick="setF('anulado',this)">Anulado</button>
@@ -2632,6 +2641,19 @@ function renderHist(){
     var SL = ['Infonet','Netel','Pronet','Compras'];
     var mr = SN.map(function(s,j){
       var sr = rows.filter(function(r){ return r.sistema === s; }); if(!sr.length) return '';
+      if(s === 'compras'){
+        var cConc = sr.filter(function(r){ return !r.sinCruz && r.impPortal!==null && Math.abs(r.diff)<=0.5; }).length;
+        var cDif  = sr.filter(function(r){ return !r.sinCruz && r.impPortal!==null && Math.abs(r.diff)>0.5; }).length;
+        var cFalt = sr.filter(function(r){ return r.sinCruz; }).length;
+        var cSolo = sr.filter(function(r){ return r.impPortal===null; }).length;
+        return '<tr>'+
+          '<td style="color:var(--teal);font-weight:600">Compras</td>'+
+          '<td style="color:#10b981"><span class="badge bconcil">'+fmt2(cConc)+'</span> conciliados</td>'+
+          '<td style="color:#f97316">'+(cDif?'<span class="badge bdif">'+fmt2(cDif)+'</span> dif. importe':'<span style="color:var(--tx3)">-</span>')+'</td>'+
+          '<td style="color:var(--red)"><span class="badge bfalt">'+fmt2(cFalt)+'</span> faltantes Libro</td>'+
+          '<td style="color:var(--amber)">'+(cSolo?'<span class="badge bsolo">'+fmt2(cSolo)+'</span> solo Libro':'<span style="color:var(--tx3)">-</span>')+'</td>'+
+        '</tr>';
+      }
       var sd = sr.filter(function(r){ return Math.abs(r.diff) > 0.5; });
       var sm = sd.reduce(function(a,r){ return a + Math.abs(r.diff); }, 0);
       return '<tr><td style="color:var(--tx);font-weight:600">'+SL[j]+'</td><td>'+fmt2(sr.length)+'</td><td style="color:var(--teal)">'+fmt2(sr.length-sd.length)+'</td><td style="color:'+(sd.length?'var(--red)':'var(--teal)')+'">'+fmt2(sd.length)+'</td><td style="color:var(--amber)">Gs. '+fmt(sm)+'</td></tr>';
@@ -2786,6 +2808,8 @@ function renderTbl(){
   
   // Logica de filtros ampliada
   if(AF === 'diff') rows = rows.filter(function(r){ return Math.abs(r.diff) > 0.5; });
+  else if(AF === 'faltante') rows = rows.filter(function(r){ return r.sistema==='compras' && r.sinCruz; });
+  else if(AF === 'solobook') rows = rows.filter(function(r){ return r.sistema==='compras' && r.impPortal===null; });
   else if(['aprobado','reversado','anulado','confirmado'].includes(AF)) rows = rows.filter(function(r){ return (r.estado||'').toLowerCase() === AF; });
   else if(['infonet','netel','pronet','compras'].includes(AF)) rows = rows.filter(function(r){ return (r.sistema||'').toLowerCase() === AF; });
   
@@ -2800,27 +2824,36 @@ function renderTbl(){
   document.getElementById('pg-prev').disabled = ST.page <= 1;
   document.getElementById('pg-next').disabled = ST.page >= pages;
   
-  var stag = {infonet: '<span class="badge bi">INFONET</span>', netel: '<span class="badge bn">NETEL</span>', pronet: '<span class="badge bp">PRONET</span>'};
+  var stag = {infonet:'<span class="badge bi">INFONET</span>',netel:'<span class="badge bn">NETEL</span>',pronet:'<span class="badge bp">PRONET</span>',compras:'<span class="badge bca">COMPRAS</span>'};
   function eB(e){
-    var el = (e||'').toLowerCase();
-    return el==='aprobado' ? '<span class="badge bap">Aprobado</span>' : el==='reversado' ? '<span class="badge bre">Reversado</span>' : el==='anulado' ? '<span class="badge ban">Anulado</span>' : el==='confirmado' ? '<span class="badge bco">Confirmado</span>' : '<span class="badge bx">Otro</span>';
+    var el=(e||'').toLowerCase();
+    return el==='aprobado'?'<span class="badge bap">Aprobado</span>':el==='reversado'?'<span class="badge bre">Reversado</span>':el==='anulado'?'<span class="badge ban">Anulado</span>':el==='confirmado'?'<span class="badge bco">Confirmado</span>':'<span class="badge bx">Otro</span>';
   }
-  function dC(d){ if(Math.abs(d) <= 0.5) return '<span class="dze">-</span>'; return '<span class="'+(d>0?'dpos':'dneg')+'">'+(d>0?'+':'-')+'Gs. '+fmt(d)+'</span>'; }
+  function eCB(r){
+    if(r.sinCruz)          return '<span class="badge bfalt">Faltante Libro</span>';
+    if(r.impPortal===null) return '<span class="badge bsolo">Solo en Libro</span>';
+    if(Math.abs(r.diff)>0.5) return '<span class="badge bdif">Dif. Importe</span>';
+    return '<span class="badge bconcil">Conciliado</span>';
+  }
+  function dC(d){ if(Math.abs(d)<=0.5) return '<span class="dze">-</span>'; return '<span class="'+(d>0?'dpos':'dneg')+'">'+(d>0?'+':'-')+'Gs. '+fmt(d)+'</span>'; }
   
   var tb = document.getElementById('tbl-body');
   if(!sl.length){ tb.innerHTML = '<tr><td colspan="10" class="empty-tbl">Ningún registro coincide con los filtros establecidos.</td></tr>'; return; }
   
   tb.innerHTML = sl.map(function(r){
-    return '<tr class="'+(Math.abs(r.diff) > 0.5 ? 'has-diff' : '')+'">'+
+    var isC=r.sistema==='compras';
+    var portalCell=r.impPortal!==null?fmt(r.impPortal):'<span style="color:var(--tx3)">-</span>';
+    var sysCell=r.impSys!==null?fmt(r.impSys):'<span style="color:var(--tx3)">-</span>';
+    return '<tr class="'+(Math.abs(r.diff)>0.5?'has-diff':'')+'">'+
       '<td>'+(stag[r.sistema]||'')+'</td>'+
       '<td class="mono">'+r.fecha+'</td>'+
       '<td class="mono">'+r.trx+'</td>'+
       '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)">'+r.cliente+'</td>'+
       '<td class="mono">'+(r.ruc||r.factura)+'</td>'+
-      '<td class="mono" style="text-align:right;">'+fmt(r.impPortal)+'</td>'+
-      '<td class="mono" style="text-align:right;">'+(r.impSys!==null?fmt(r.impSys):'<span style="color:var(--tx3)">S/C</span>')+'</td>'+
+      '<td class="mono" style="text-align:right;">'+portalCell+'</td>'+
+      '<td class="mono" style="text-align:right;">'+sysCell+'</td>'+
       '<td style="text-align:right">'+dC(r.diff)+'</td>'+
-      '<td>'+eB(r.estado)+'</td>'+
+      '<td>'+(isC?eCB(r):eB(r.estado))+'</td>'+
       '<td><span style="color:var(--tx3);font-size:11.5px">'+(r.causa||'-')+'</span></td>'+
     '</tr>';
   }).join('');
