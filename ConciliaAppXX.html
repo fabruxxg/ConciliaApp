@@ -3314,7 +3314,7 @@ function ejecutarSimulacionLocal(setP) {
       if (e.isIntersecting) {
         var el = e.target;
         var raw = el.textContent.trim();
-        var num = parseFloat(raw.replace(/[^0-9.]/g, ''));
+        var num = parseFloat(raw.replace(/[^0-9]/g, '')); // strip ALL non-digits so 'Gs. 1 120' → '1120', not '.1120'
         if (!isNaN(num) && num > 0) {
           var prefix = raw.match(/^[^0-9]*/)[0];
           var suffix = raw.match(/[^0-9.]*$/)[0];
