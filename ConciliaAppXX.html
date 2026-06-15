@@ -1243,7 +1243,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     <!-- BANNER DE DATOS DEMO -->
     <div class="demo-banner reveal reveal-delay-1">
       <div class="demo-txt">
-        <svg class="demo-banner-icon" style="display:inline;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><strong>¿No dispones de archivos reales en este momento?</strong><br>
+        <svg width="16" height="16" style="display:inline;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><strong>¿No dispones de archivos reales en este momento?</strong><br>
         Usa nuestro Generador Inteligente de Datos de Prueba para evaluar el sistema completo al instante.
       </div>
       <div class="demo-btn-container">
@@ -1252,7 +1252,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     </div>
     
     <div class="info-pill reveal reveal-delay-2">
-      <span class="info-pill-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+      <span class="info-pill-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
       <span>El sistema detecta automáticamente transacciones anteriores. Puedes alimentar el histórico día con día sin temor a duplicar registros ni corromper información existente.</span>
     </div>
 
@@ -1390,7 +1390,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     <!-- BANNER DE DATOS DEMO BANCARD -->
     <div class="demo-banner">
       <div class="demo-txt">
-        <svg class="demo-banner-icon" style="display:inline;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><strong>Prueba la Auditoría Bancard al instante</strong> con datos ficticios realistas de Tesorería, Contabilidad y Extractos bancarios paraguayos.
+        <svg width="16" height="16" style="display:inline;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><strong>Prueba la Auditoría Bancard al instante</strong> con datos ficticios realistas de Tesorería, Contabilidad y Extractos bancarios paraguayos.
       </div>
       <div class="demo-btn-container">
         <button class="act-btn primary" onclick="injectBancardMockAndRun()">Generar Auditoría Demo</button>
@@ -1513,7 +1513,7 @@ function renderizarHistorialEnInterfaz(historial) {
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   var renderer = new THREE.WebGLRenderer({canvas: canvas, alpha: true, antialias: true});
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   // Generar constelación de partículas en tonos naranja y ámbar corporativos
@@ -1576,7 +1576,7 @@ function renderizarHistorialEnInterfaz(historial) {
   window.addEventListener('resize', function() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
   });
 
   function animate() {
@@ -2293,14 +2293,16 @@ function renderHist(){
   
   sumEl.style.display = 'block';
   var okAll = all.filter(function(r){ return Math.abs(r.diff) <= 0.5; });
+  var tmSafe = isNaN(tm) ? 0 : tm;
   document.getElementById('hist-metrics').innerHTML = [
     {icon:'📅', label:'Periodos',         val:fmt2(ST.history.length), sub:'Días procesados',              cls:'',   c:'var(--primary)'},
     {icon:'📋', label:'Volumen Total',    val:fmt2(all.length),         sub:fmt2(okAll.length)+' correctos', cls:'vg', c:'var(--teal)'},
     {icon:'⚠',  label:'Desviaciones',    val:fmt2(td.length),          sub:pct(td.length,all.length)+' del total', cls:'vr', c:'var(--red)'},
-    {icon:'💰', label:'Impacto Acumulado',val:'Gs. '+fmt(tm),           sub:'Valor expuesto en desvíos',   cls:'va', c:'var(--amber)'}
+    {icon:'💰', label:'Impacto Acumulado',val:'Gs. '+fmt(tmSafe),        sub:'Valor expuesto en desvíos',   cls:'va', c:'var(--amber)'}
   ].map(function(m){
     return '<div class="mc card-tilt"><div class="mc-glow-spot" style="background:'+m.c+'"></div><div class="mc-icon" style="color:'+m.c+'">'+m.icon+'</div><div class="mc-lbl">'+m.label+'</div><div class="mc-val '+m.cls+'">'+m.val+'</div><div class="mc-sub">'+m.sub+'</div></div>';
   }).join('');
+  setTimeout(function(){ if(typeof attachCounters==='function') attachCounters(); if(typeof attachReveal==='function') attachReveal(); }, 60);
   
   list.innerHTML = ST.history.map(function(h,i){
     var rows = h.rows;
