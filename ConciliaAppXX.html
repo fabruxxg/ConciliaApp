@@ -2284,6 +2284,8 @@ function readSheet(buf, skip){
 function concilCompras(bufM, bufL){
   // ── Helpers ──
   function normNro(n){ var s = String(n||'').trim().replace(/-/g,'').replace(/^0+/,''); return s || '0'; }
+  // Strip RUC check digit: "80014137-5" → "80014137", also trims spaces
+  function normRuc(r){ return String(r||'').trim().replace(/\s+/g,'').replace(/-\d{1,2}$/, ''); }
   function excelDateToStr(v){
     if(!v) return '';
     if(typeof v === 'string' && v.match(/\d{4}-\d{2}-\d{2}/)) return v.split(' ')[0];
@@ -2298,27 +2300,60 @@ function concilCompras(bufM, bufL){
   var wbM = XLSX.read(bufM, {type:'array', raw:true});
   var sh  = wbM.Sheets[wbM.SheetNames[0]];
   var dataM = XLSX.utils.sheet_to_json(sh, {header:1, defval:''});
-  // Detect header row (look for "Identificador" or "RUC")
-  var hM = 0;
+
+  // Dynamic column detection for Marangatu header
+  var hM=0;
+  var cMRuc=-1, cMNom=-1, cMFecha=-1, cMTipo=-1, cMNro=-1, cMTimb=-1;
+  var cMGrav5=-1, cMGrav10=-1, cMExenta=-1, cMIva5=-1, cMIva10=-1, cMTotal=-1;
   for(var i=0;i<Math.min(5,dataM.length);i++){
-    var r0 = String(dataM[i][0]||'');
-    if(r0.includes('dentificador')||r0.includes('RUC')||r0.includes('Número')) { hM=i; break; }
+    var hrow=dataM[i].map(function(h){ return String(h||'').toLowerCase().trim(); });
+    if(hrow.some(function(h){ return h.includes('ruc')||h.includes('comprobante')||h.includes('timbrado'); })){
+      hM=i;
+      hrow.forEach(function(h,j){
+        if(h.includes('ruc')&&cMRuc<0) cMRuc=j;
+        else if((h.includes('nombre')||h.includes('razon')||h.includes('razón'))&&cMNom<0) cMNom=j;
+        else if(h.includes('fecha')&&cMFecha<0) cMFecha=j;
+        else if(h.includes('tipo')&&cMTipo<0) cMTipo=j;
+        else if((h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
+        else if(h.includes('timbrado')&&cMTimb<0) cMTimb=j;
+        else if(h.includes('grav')&&h.includes('5')&&cMGrav5<0) cMGrav5=j;
+        else if(h.includes('grav')&&h.includes('10')&&cMGrav10<0) cMGrav10=j;
+        else if((h.includes('exenta')||h.includes('exento'))&&cMExenta<0) cMExenta=j;
+        else if(h.includes('iva')&&h.includes('5')&&cMIva5<0) cMIva5=j;
+        else if(h.includes('iva')&&h.includes('10')&&cMIva10<0) cMIva10=j;
+        else if((h==='total'||h==='monto'||h==='monto total')&&cMTotal<0) cMTotal=j;
+      });
+      break;
+    }
   }
+  // Fallback positions (typical Marangatu COMPRAS layout)
+  if(cMRuc<0)   cMRuc=1;   if(cMNom<0)   cMNom=2;
+  if(cMFecha<0) cMFecha=3; if(cMTipo<0)  cMTipo=4;
+  if(cMNro<0)   cMNro=5;   if(cMTimb<0)  cMTimb=6;
+  if(cMGrav5<0) cMGrav5=7; if(cMGrav10<0)cMGrav10=8;
+  if(cMExenta<0)cMExenta=9;if(cMIva5<0)  cMIva5=10;
+  if(cMIva10<0) cMIva10=11;if(cMTotal<0) cMTotal=12;
+
   for(var r=hM+1;r<dataM.length;r++){
     var row=dataM[r];
-    var ruc=String(row[1]||'').trim();
-    var nro=String(row[5]||'').trim();
+    var ruc=normRuc(String(row[cMRuc]||'').trim());
+    var nro=String(row[cMNro]||'').trim();
     if(!ruc||!nro) continue;
     var key=normNro(nro)+'_'+ruc;
-    // Duplicate: keep first (Marangatu can have duplicates?)
     if(mapM[key]) continue;
+    // Monto: use explicit total col if present; otherwise sum all components
+    var g5=num(row[cMGrav5]),g10=num(row[cMGrav10]),ex=num(row[cMExenta]);
+    var i5=num(row[cMIva5]),i10=num(row[cMIva10]);
+    var tot=num(row[cMTotal]);
+    var monto = tot>0 ? tot : g5+i5+g10+i10+ex;
+    if(!monto) continue;
     mapM[key]={
-      ruc:ruc, nombre:String(row[2]||'').trim(),
-      fecha:excelDateToStr(row[3]),
-      tipo:String(row[4]||'FACTURA').trim(),
+      ruc:ruc, nombre:String(row[cMNom]||'').trim(),
+      fecha:excelDateToStr(row[cMFecha]),
+      tipo:String(row[cMTipo]||'FACTURA').trim(),
       nro:normNro(nro), nroRaw:nro,
-      timbrado:String(row[6]||'').trim(),
-      monto:num(row[7])
+      timbrado:String(row[cMTimb]||'').trim(),
+      monto:monto
     };
   }
 
@@ -2363,8 +2398,8 @@ function concilCompras(bufM, bufL){
 
   for(var r=hL+1;r<dataL.length;r++){
     var row=dataL[r];
-    var nro=String(row[cNro]||'').trim();
-    var prov=String(row[cProv>=0?cProv:3]||'').trim();
+    var nro=String(row[cNro>=0?cNro:1]||'').trim();
+    var prov=normRuc(String(row[cProv>=0?cProv:3]||'').trim());
     if(!nro||!prov||nro==='0') continue;
     var grav5=num(row[cGrav5>=0?cGrav5:4]);
     var grav10=num(row[cGrav10>=0?cGrav10:5]);
@@ -2394,7 +2429,7 @@ function concilCompras(bufM, bufL){
   Object.keys(mapM).forEach(function(key){
     var m=mapM[key]; var l=mapL[key];
     var iS=l?l.total:null;
-    var diff=iS!==null?m.monto-iS:0;
+    var diff=iS!==null?m.monto-iS:m.monto;
     var sinCruz=iS===null;
     var causa='';
     if(sinCruz) causa='Comprobante en Marangatu sin registro en Libro';
@@ -2470,10 +2505,10 @@ function runConcil(){
       }
       
       setP(95, 'Archivando histórico corporativo...');
-      // Filter rows to the selected corte date only (avoids re-including prior days from cumulative files)
+      // Filter rows up to and including the corte date (cumulative: all transactions through cutoff)
       var corteVal = document.getElementById('fecha-corte').value; // YYYY-MM-DD
       if(corteVal){
-        ST.rows = ST.rows.filter(function(r){ return r.fecha === corteVal; });
+        ST.rows = ST.rows.filter(function(r){ return !r.fecha || r.fecha <= corteVal; });
       }
       // History key = the corte date (not the run date), so each cutoff accumulates independently
       var corteDate = today;
