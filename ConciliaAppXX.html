@@ -2345,19 +2345,21 @@ function concilCompras(bufM, bufL){
   if(_bestHits>=3){
     var hrow=dataM[hM].map(function(h){ return String(h||'').toLowerCase().trim(); });
     hrow.forEach(function(h,j){
-      if(h.includes('ruc')&&cMRuc<0) cMRuc=j;
+      // "Número de Identificación del Vendedor" → RUC; also plain 'ruc'
+      if((h.includes('ruc')||(h.includes('identificaci')&&!h.includes('comprobante')))&&cMRuc<0) cMRuc=j;
       else if((h.includes('nombre')||h.includes('razon')||h.includes('razón'))&&cMNom<0) cMNom=j;
       else if(h.includes('fecha')&&cMFecha<0) cMFecha=j;
       else if(h.includes('tipo')&&cMTipo<0) cMTipo=j;
       else if(h.includes('timbrado')&&cMTimb<0) cMTimb=j;
-      // Skip "Identificador del Comprobante" (CDC e-invoice) — pick only the real nro column
-      else if(!h.includes('identificador')&&(h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
+      // "Número de Comprobante" (col 5) — skip CDC "Identificador" and vendor RUC "Identificación"
+      else if(!h.includes('identificador')&&!h.includes('identificaci')&&(h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
       else if(h.includes('grav')&&h.includes('5')&&cMGrav5<0) cMGrav5=j;
       else if(h.includes('grav')&&h.includes('10')&&cMGrav10<0) cMGrav10=j;
       else if((h.includes('exenta')||h.includes('exento'))&&cMExenta<0) cMExenta=j;
       else if(h.includes('iva')&&h.includes('5')&&cMIva5<0) cMIva5=j;
       else if(h.includes('iva')&&h.includes('10')&&cMIva10<0) cMIva10=j;
-      else if((h==='total'||h==='monto'||h==='monto total')&&cMTotal<0) cMTotal=j;
+      // "Monto Total del Comprobante" — match by substring, not exact
+      else if((h.includes('monto')&&h.includes('total')||h==='total')&&cMTotal<0) cMTotal=j;
     });
   }
   // Fallback positions (typical Marangatu COMPRAS layout)
@@ -2366,7 +2368,7 @@ function concilCompras(bufM, bufL){
   if(cMNro<0)   cMNro=5;   if(cMTimb<0)  cMTimb=6;
   if(cMGrav5<0) cMGrav5=7; if(cMGrav10<0)cMGrav10=8;
   if(cMExenta<0)cMExenta=9;if(cMIva5<0)  cMIva5=10;
-  if(cMIva10<0) cMIva10=11;if(cMTotal<0) cMTotal=12;
+  if(cMIva10<0) cMIva10=11;if(cMTotal<0) cMTotal=7;
 
   for(var r=hM+1;r<dataM.length;r++){
     var row=dataM[r];
@@ -2418,7 +2420,7 @@ function concilCompras(bufM, bufL){
         else if(h==='iva5') cIva5=j;
         else if(h==='iva10') cIva10=j;
         else if(h==='nomcli'||h.includes('razón')||h.includes('razon')) cNomcli=j;
-        else if(h==='proveedor'||h==='ruc') cProv=j;
+        else if((h==='ruc'||h==='proveedor')&&cProv<0) cProv=j;
         else if(h.includes('timbrado')) cTimb=j;
       });
       break;
