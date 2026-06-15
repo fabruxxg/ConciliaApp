@@ -2327,7 +2327,10 @@ function concilCompras(bufM, bufL){
 
   // ── 1. Parsear Marangatu (CSV o XLSX) ──
   var mapM = {};
-  var wbM = XLSX.read(bufM, {type:'array', raw:true});
+  // Marangatu CSVs from Paraguay's SET use semicolons — detect before XLSX.read
+  var _sample = new TextDecoder('utf-8').decode(new Uint8Array(bufM, 0, Math.min(1024, bufM.byteLength)));
+  var _FS = _sample.split('\n')[0].includes(';') ? ';' : ',';
+  var wbM = XLSX.read(bufM, {type:'array', raw:true, FS:_FS});
   var sh  = wbM.Sheets[wbM.SheetNames[0]];
   var dataM = XLSX.utils.sheet_to_json(sh, {header:1, defval:''});
 
