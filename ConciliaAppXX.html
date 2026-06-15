@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- Librería 3D para renderizar el fondo de partículas interconectadas interactivo -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1296,6 +1297,19 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
         </div>
       </div>
     </div>
+
+      <!-- Libro Compras Card -->
+      <div class="sys-card card-tilt reveal reveal-delay-3" id="card-compras">
+        <div class="sc-hd">
+          <div class="sc-num">ARCHIVOS — COMPRAS SET</div>
+          <div class="sc-title">Libro de Compras</div>
+          <div class="sc-desc">Conciliación fiscal: cruza el Libro de Compras interno contra la declaración SET (Marangatu) por RUC + Nro. Comprobante.</div>
+        </div>
+        <div class="sc-bd">
+          <div><div class="slot-label"><span class="tag-p">Portal</span>Marangatu (CSV o ZIP)</div><button class="slot-btn" id="b-mp" onclick="document.getElementById('f-mp').click()">↑ Seleccionar .CSV / .ZIP</button><input type="file" class="fi" id="f-mp" accept=".csv,.zip,.xlsx,.xls" onchange="loadF('mp',this)"></div>
+          <div><div class="slot-label"><span class="tag-s">Sistema</span>Libro Compras</div><button class="slot-btn" id="b-ls" onclick="document.getElementById('f-ls').click()">↑ Seleccionar .XLS / .XLSX</button><input type="file" class="fi" id="f-ls" accept=".xls,.xlsx" onchange="loadF('ls',this)"></div>
+        </div>
+      </div>
     
     <div class="run-wrap">
       <button class="run-main" id="run-btn" disabled onclick="runConcil()">Procesar Conciliación ▸</button>
@@ -1353,6 +1367,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
           <button class="pill" onclick="setF('infonet',this)">Infonet</button>
           <button class="pill" onclick="setF('netel',this)">Netel</button>
           <button class="pill" onclick="setF('pronet',this)">Pronet</button>
+          <button class="pill" onclick="setF('compras',this)">Compras</button>
           <button class="pill" onclick="setF('diff',this)">⚠ Diferencias</button>
           <button class="pill pa" onclick="setF('aprobado',this)">Aprobado</button>
           <button class="pill pr" onclick="setF('reversado',this)">Reversado</button>
@@ -1829,7 +1844,7 @@ function toggleTheme(){
   html.setAttribute('data-theme', isDark ? 'light' : 'dark');
   document.getElementById('theme-label').textContent = isDark ? 'Tema Oscuro' : 'Tema Claro';
   localStorage.setItem('concilia_theme', isDark ? 'light' : 'dark');
-  if(ST.rows.length) buildCharts(ST.rows, ['infonet','netel','pronet'], ['Infonet','Netel','Pronet']);
+  if(ST.rows.length) buildCharts(ST.rows, ['infonet','netel','pronet','compras'], ['Infonet','Netel','Pronet','Compras']);
 }
 (function(){
   var t = localStorage.getItem('concilia_theme') || 'dark';
@@ -1933,19 +1948,40 @@ function goTo(name, el){
 // ══ SELECCIÓN Y CARGA DE EXTRACTOS ══
 function loadF(key, input){
   var file = input.files[0]; if(!file) return;
+  // Marangatu ZIP: extract CSV automatically
+  if(key === 'mp' && file.name.toLowerCase().endsWith('.zip')){
+    var zr = new FileReader();
+    zr.onload = function(e){
+      if(typeof JSZip === 'undefined'){ customAlert('JSZip no disponible','Recarga la pagina'); return; }
+      JSZip.loadAsync(e.target.result).then(function(zip){
+        var entry = null;
+        zip.forEach(function(p,f){ if(!entry && /\.(csv|txt)$/i.test(p)) entry = f; });
+        if(!entry){ customAlert('ZIP vacio','No se encontro CSV en el ZIP'); return; }
+        entry.async('arraybuffer').then(function(buf){
+          ST.files.mp = buf;
+          var el = document.getElementById('b-mp');
+          if(el){ el.classList.add('ok'); el.textContent = '(CSV) ' + file.name; }
+          document.getElementById('card-compras')?.classList.add('done');
+          checkRun();
+        });
+      }).catch(function(err){ customAlert('Error ZIP', err.message); });
+    };
+    zr.readAsArrayBuffer(file);
+    return;
+  }
   var r = new FileReader();
   r.onload = function(e){
     ST.files[key] = e.target.result;
     var el = document.getElementById('b-' + key);
     if(el){ el.classList.add('ok'); el.textContent = '✓ ' + file.name; }
-    var map = {ip: 'infonet', is: 'infonet', np: 'netel', ns: 'netel', pp: 'pronet', ps: 'pronet'};
+    var map = {ip: 'infonet', is: 'infonet', np: 'netel', ns: 'netel', pp: 'pronet', ps: 'pronet', mp: 'compras', ls: 'compras'};
     document.getElementById('card-' + map[key])?.classList.add('done');
     checkRun();
   };
   r.readAsArrayBuffer(file);
 }
 function checkRun(){
-  var ok = (ST.files.ip && ST.files.is) || (ST.files.np && ST.files.ns) || (ST.files.pp && ST.files.ps);
+  var ok = (ST.files.ip && ST.files.is) || (ST.files.np && ST.files.ns) || (ST.files.pp && ST.files.ps) || (ST.files.mp && ST.files.ls);
   document.getElementById('run-btn').disabled = !ok;
   document.getElementById('run-q').disabled = !ok;
   if(ok) document.getElementById('run-note').textContent = 'Estructuras de datos analizadas. Proceda a ejecutar.';
@@ -2233,6 +2269,148 @@ function readSheet(buf, skip){
   });
 }
 
+// ══ CONCILIACIÓN LIBRO COMPRAS vs MARANGATU (SET) ══
+function concilCompras(bufM, bufL){
+  // ── Helpers ──
+  function normNro(n){ var s = String(n||'').trim().replace(/-/g,'').replace(/^0+/,''); return s || '0'; }
+  function excelDateToStr(v){
+    if(!v) return '';
+    if(typeof v === 'string' && v.match(/\d{4}-\d{2}-\d{2}/)) return v.split(' ')[0];
+    var n = parseFloat(v);
+    if(isNaN(n)) return String(v).split(' ')[0];
+    var d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  // ── 1. Parsear Marangatu (CSV o XLSX) ──
+  var mapM = {};
+  var wbM = XLSX.read(bufM, {type:'array', raw:true});
+  var sh  = wbM.Sheets[wbM.SheetNames[0]];
+  var dataM = XLSX.utils.sheet_to_json(sh, {header:1, defval:''});
+  // Detect header row (look for "Identificador" or "RUC")
+  var hM = 0;
+  for(var i=0;i<Math.min(5,dataM.length);i++){
+    var r0 = String(dataM[i][0]||'');
+    if(r0.includes('dentificador')||r0.includes('RUC')||r0.includes('Número')) { hM=i; break; }
+  }
+  for(var r=hM+1;r<dataM.length;r++){
+    var row=dataM[r];
+    var ruc=String(row[1]||'').trim();
+    var nro=String(row[5]||'').trim();
+    if(!ruc||!nro) continue;
+    var key=normNro(nro)+'_'+ruc;
+    // Duplicate: keep first (Marangatu can have duplicates?)
+    if(mapM[key]) continue;
+    mapM[key]={
+      ruc:ruc, nombre:String(row[2]||'').trim(),
+      fecha:excelDateToStr(row[3]),
+      tipo:String(row[4]||'FACTURA').trim(),
+      nro:normNro(nro), nroRaw:nro,
+      timbrado:String(row[6]||'').trim(),
+      monto:num(row[7])
+    };
+  }
+
+  // ── 2. Parsear Libro de Compras (XLS/XLSX) ──
+  var mapL = {};
+  var wbL = XLSX.read(bufL, {type:'array', raw:true});
+  // Prefer sheet named 'econt' or 'compras'; else first sheet
+  var shName = wbL.SheetNames[0];
+  wbL.SheetNames.forEach(function(n){ if(/econt|compra/i.test(n)) shName=n; });
+  var shL = wbL.Sheets[shName];
+  var dataL = XLSX.utils.sheet_to_json(shL, {header:1, defval:''});
+
+  // Detect column positions from header row
+  var hL=-1, cNomcom=-1, cNro=-1, cFecha=-1, cGrav5=-1, cGrav10=-1, cExenta=-1;
+  var cIva5=-1, cIva10=-1, cNomcli=-1, cProv=-1, cTimb=-1;
+  for(var i=0;i<Math.min(5,dataL.length);i++){
+    var hrow=dataL[i].map(function(h){ return String(h||'').toLowerCase().trim(); });
+    // Detect: libro has 'nomcom' or 'nrocomp' or 'proveedor'
+    if(hrow.some(function(h){ return h==='nomcom'||h==='nrocomp'||h==='proveedor'; })){
+      hL=i;
+      hrow.forEach(function(h,j){
+        if(h==='nomcom'||h.includes('tipo')) cNomcom=j;
+        else if(h==='nrocomp'||h==='numero'||h==='número'||(h.includes('nro')&&h.includes('comp'))) cNro=j;
+        else if(h.includes('fecha')&&cFecha<0) cFecha=j;
+        else if(h==='gravada5'||h==='grav5') cGrav5=j;
+        else if(h==='gravada10'||h==='grav10') cGrav10=j;
+        else if(h==='exenta'||h==='exento') cExenta=j;
+        else if(h==='iva5') cIva5=j;
+        else if(h==='iva10') cIva10=j;
+        else if(h==='nomcli'||h.includes('razón')||h.includes('razon')) cNomcli=j;
+        else if(h==='proveedor'||h==='ruc') cProv=j;
+        else if(h.includes('timbrado')) cTimb=j;
+      });
+      break;
+    }
+    // Also detect econt format: nomcom at 0, numeric-ish at 1, ruc at 3
+    if(hrow[0]==='nomcom'||(hrow[0]==='nomcom'||String(dataL[Math.min(i+1,dataL.length-1)][0]||'').includes('FACTURA'))){
+      if(cNro<0){ hL=i; cNomcom=0;cNro=1;cFecha=2;cProv=3;cGrav5=4;cGrav10=5;cExenta=6;cNomcli=7;cIva5=8;cIva10=9;cTimb=10; break; }
+    }
+  }
+  if(hL<0){ hL=0; cNomcom=0;cNro=1;cFecha=2;cProv=3;cGrav5=4;cGrav10=5;cExenta=6;cNomcli=7;cIva5=8;cIva10=9;cTimb=10; }
+
+  for(var r=hL+1;r<dataL.length;r++){
+    var row=dataL[r];
+    var nro=String(row[cNro]||'').trim();
+    var prov=String(row[cProv>=0?cProv:3]||'').trim();
+    if(!nro||!prov||nro==='0') continue;
+    var grav5=num(row[cGrav5>=0?cGrav5:4]);
+    var grav10=num(row[cGrav10>=0?cGrav10:5]);
+    var exenta=num(row[cExenta>=0?cExenta:6]);
+    var iva5=cIva5>=0?num(row[cIva5]):Math.round(grav5*0.05);
+    var iva10=cIva10>=0?num(row[cIva10]):Math.round(grav10*0.10);
+    var total=grav5+iva5+grav10+iva10+exenta;
+    if(!total) continue;
+    var key=normNro(nro)+'_'+prov;
+    mapL[key]={
+      tipo:String(row[cNomcom>=0?cNomcom:0]||'FACTURA').trim(),
+      nro:normNro(nro), nroRaw:nro,
+      prov:prov,
+      nomcli:String(row[cNomcli>=0?cNomcli:7]||'').trim(),
+      total:total,
+      grav5:grav5, grav10:grav10, exenta:exenta,
+      timb:String(row[cTimb>=0?cTimb:10]||'').trim(),
+      fecha:excelDateToStr(cFecha>=0?row[cFecha]:'')
+    };
+  }
+
+  // ── 3. Cruce ──
+  var rows=[];
+  var matchedL={};
+
+  // Marangatu entries
+  Object.keys(mapM).forEach(function(key){
+    var m=mapM[key]; var l=mapL[key];
+    var iS=l?l.total:null;
+    var diff=iS!==null?m.monto-iS:0;
+    var sinCruz=iS===null;
+    var causa='';
+    if(sinCruz) causa='Comprobante en Marangatu sin registro en Libro';
+    else if(Math.abs(diff)>0.5) causa='Diferencia de importe (Gs. '+fmt(Math.abs(diff))+')';
+    if(l) matchedL[key]=true;
+    rows.push({
+      sistema:'compras', fecha:m.fecha, trx:m.nro, nroRaw:m.nroRaw,
+      cliente:m.nombre, ruc:m.ruc, factura:m.timbrado,
+      impPortal:m.monto, impSys:iS, diff:diff,
+      sinCruz:sinCruz, estado:m.tipo, causa:causa
+    });
+  });
+
+  // Libro entries NOT in Marangatu
+  Object.keys(mapL).forEach(function(key){
+    if(matchedL[key]) return;
+    var l=mapL[key];
+    rows.push({
+      sistema:'compras', fecha:l.fecha, trx:l.nro, nroRaw:l.nroRaw,
+      cliente:l.nomcli, ruc:l.prov, factura:l.timb,
+      impPortal:null, impSys:l.total, diff:-l.total,
+      sinCruz:false, estado:l.tipo, causa:'Comprobante en Libro sin registro en Marangatu'
+    });
+  });
+
+  return rows;
+}
 // ══ EJECUCIÓN CONCILIADORA MULTIPRESERVADA ══
 function runConcil(){
   var today = new Date().toLocaleDateString('es-PY', {day: '2-digit', month: '2-digit', year: 'numeric'});
@@ -2267,6 +2445,11 @@ function runConcil(){
             setP(80, 'Procesando canal Pronet...');
             var rp = concilPronet(ST.files.pp, ST.files.ps);
             ST.rows.push.apply(ST.rows, rp);
+          }
+          if(ST.files.mp && ST.files.ls){
+            setP(88, 'Conciliando Libro de Compras vs Marangatu...');
+            var rc = concilCompras(ST.files.mp, ST.files.ls);
+            ST.rows.push.apply(ST.rows, rc);
           }
         } catch(err) {
           customAlert('Fallo del Motor de Cruce', 'Error al leer archivos reales: ' + err.message);
@@ -2338,8 +2521,8 @@ function renderHist(){
     ].join('');
     
     var dt = diffs.length === 0 ? '✓ Cuadrado perfecto' : fmt2(diffs.length) + ' desviaciones · Gs. ' + fmt(monto);
-    var SN = ['infonet','netel','pronet'];
-    var SL = ['Infonet','Netel','Pronet'];
+    var SN = ['infonet','netel','pronet','compras'];
+    var SL = ['Infonet','Netel','Pronet','Compras'];
     var mr = SN.map(function(s,j){
       var sr = rows.filter(function(r){ return r.sistema === s; }); if(!sr.length) return '';
       var sd = sr.filter(function(r){ return Math.abs(r.diff) > 0.5; });
@@ -2405,8 +2588,8 @@ function renderDash(rows){
     return '<div class="mc card-tilt"><div class="mc-glow-spot" style="background:'+m.c+'"></div><div class="mc-icon" style="color:'+m.c+'">'+m.icon+'</div><div class="mc-lbl">'+m.label+'</div><div class="mc-val '+m.cls+'">'+m.val+'</div><div class="mc-sub">'+m.sub+'</div></div>';
   }).join('');
   
-  var SIS = ['infonet','netel','pronet'];
-  var SN = ['Infonet', 'Netel', 'Pronet'];
+  var SIS = ['infonet','netel','pronet','compras'];
+  var SN = ['Infonet', 'Netel', 'Pronet', 'Compras'];
   var SE = ['🟢', '🔵', '🟠'];
   document.getElementById('dash-panels').innerHTML = SIS.map(function(s,i){
     var sr = rows.filter(function(r){ return r.sistema === s; });
@@ -2497,7 +2680,7 @@ function renderTbl(){
   // Logica de filtros ampliada
   if(AF === 'diff') rows = rows.filter(function(r){ return Math.abs(r.diff) > 0.5; });
   else if(['aprobado','reversado','anulado','confirmado'].includes(AF)) rows = rows.filter(function(r){ return (r.estado||'').toLowerCase() === AF; });
-  else if(['infonet','netel','pronet'].includes(AF)) rows = rows.filter(function(r){ return (r.sistema||'').toLowerCase() === AF; });
+  else if(['infonet','netel','pronet','compras'].includes(AF)) rows = rows.filter(function(r){ return (r.sistema||'').toLowerCase() === AF; });
   
   if(q) rows = rows.filter(function(r){ return (r.cliente+r.ruc+r.trx+r.factura+r.estado).toLowerCase().includes(q); });
   
