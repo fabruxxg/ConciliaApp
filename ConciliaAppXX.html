@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -1952,9 +1952,27 @@ function checkRun(){
 }
 
 // Auxiliares de formato
-function num(v){ if(v === '' || v == null) return 0; var n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n; }
+function num(v){
+  if(v === '' || v == null) return 0;
+  var s = String(v).trim();
+  // Detect Paraguayan format: period as thousands separator, comma as decimal
+  // e.g. "200.000" = 200000, "1.600.000" = 1600000, "1.600,50" = 1600.50
+  if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) || /^-?\d+(,\d+)$/.test(s)){
+    s = s.replace(/\./g,'').replace(',','.');
+  } else {
+    s = s.replace(/[^0-9.\-]/g,'');
+  }
+  var n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
 function fmt(n){  var v=Math.round(Math.abs(n||0)); return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
-function fmt2(n){ var v=Math.round(n||0);          return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
+function fmt2(n){ var v=Math.round(n||0);          return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
+function fmtMonto(n){
+  n = Math.abs(n||0);
+  if(isNaN(n)||n===0) return '0';
+  if(n<1) return n.toFixed(2).replace('.',',');
+  return fmt(n);
+}
 function pct(a, b){ return b ? (a / b * 100).toFixed(1) + '%' : '0.0%'; }
 function netelId(raw){
   var s = String(raw).trim(); if(s.length <= 7) return s;
@@ -2298,7 +2316,7 @@ function renderHist(){
     {icon:'📅', label:'Periodos',         val:fmt2(ST.history.length), sub:'Días procesados',              cls:'',   c:'var(--primary)'},
     {icon:'📋', label:'Volumen Total',    val:fmt2(all.length),         sub:fmt2(okAll.length)+' correctos', cls:'vg', c:'var(--teal)'},
     {icon:'⚠',  label:'Desviaciones',    val:fmt2(td.length),          sub:pct(td.length,all.length)+' del total', cls:'vr', c:'var(--red)'},
-    {icon:'💰', label:'Impacto Acumulado',val:'Gs. '+fmt(tmSafe),        sub:'Valor expuesto en desvíos',   cls:'va', c:'var(--amber)'}
+    {icon:'💰', label:'Impacto Acumulado',val:'Gs. '+fmtMonto(tmSafe),   sub:'Valor expuesto en desvíos',   cls:'va', c:'var(--amber)'}
   ].map(function(m){
     return '<div class="mc card-tilt"><div class="mc-glow-spot" style="background:'+m.c+'"></div><div class="mc-icon" style="color:'+m.c+'">'+m.icon+'</div><div class="mc-lbl">'+m.label+'</div><div class="mc-val '+m.cls+'">'+m.val+'</div><div class="mc-sub">'+m.sub+'</div></div>';
   }).join('');
