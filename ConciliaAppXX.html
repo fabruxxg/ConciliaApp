@@ -2453,13 +2453,15 @@ function concilCompras(bufM, bufL){
   }
 
   // ── DEBUG ──
+  console.log('[M] HEADER fila '+hM+':', dataM[hM] ? dataM[hM].slice(0,14) : 'vacia');
+  console.log('[M] cols: hM='+hM+' bestHits='+_bestHits+' cMRuc='+cMRuc+' cMNro='+cMNro+' cMTimb='+cMTimb+' cMTotal='+cMTotal);
+  var _mR1=dataM[hM+1]; if(_mR1) console.log('[M] fila1: nro=[col'+cMNro+']='+_mR1[cMNro]+' ruc=[col'+cMRuc+']='+_mR1[cMRuc]+' tot=[col'+cMTotal+']='+_mR1[cMTotal]);
+  console.log('[L] HEADER fila '+hL+':', dataL[hL] ? dataL[hL].slice(0,15) : 'vacia');
+  console.log('[L] cols: hL='+hL+' cNro='+cNro+' cProv='+cProv+' cGrav5='+cGrav5+' cGrav10='+cGrav10);
+  var _lR1=dataL[hL+1]; if(_lR1) console.log('[L] fila1: nro=[col'+cNro+']='+_lR1[cNro]+' prov=[col'+cProv+']='+_lR1[cProv]);
   var _mKeys=Object.keys(mapM), _lKeys=Object.keys(mapL);
-  console.log('[ConcilCompras] Marangatu: '+_mKeys.length+' entradas | hM='+hM+' cMRuc='+cMRuc+' cMNro='+cMNro+' cMTotal='+cMTotal);
-  console.log('[ConcilCompras] Marangatu muestra claves:', _mKeys.slice(0,3));
-  var _mSample=dataM[hM+1]; if(_mSample) console.log('[ConcilCompras] Marangatu fila1 raw nro='+_mSample[cMNro]+' ruc='+_mSample[cMRuc]);
-  console.log('[ConcilCompras] Libro:     '+_lKeys.length+' entradas | hL='+hL+' cNro='+cNro+' cProv='+cProv);
-  console.log('[ConcilCompras] Libro muestra claves:', _lKeys.slice(0,3));
-  var _lSample=dataL[hL+1]; if(_lSample) console.log('[ConcilCompras] Libro fila1 raw nro='+_lSample[cNro>=0?cNro:1]+' prov='+_lSample[cProv>=0?cProv:7]);
+  console.log('[M] '+_mKeys.length+' entradas. Muestra:', _mKeys.slice(0,3));
+  console.log('[L] '+_lKeys.length+' entradas. Muestra:', _lKeys.slice(0,3));
 
   // ── 3. Cruce ──
   var rows=[];
