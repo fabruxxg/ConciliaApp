@@ -2372,6 +2372,9 @@ function concilCompras(bufM, bufL){
 
   for(var r=hM+1;r<dataM.length;r++){
     var row=dataM[r];
+    // Only process facturas — skip notas de crédito, débito, autofacturas, etc.
+    var tipo=String(row[cMTipo]||'').trim().toLowerCase();
+    if(tipo&&!tipo.startsWith('factura')) continue;
     var ruc=normRuc(String(row[cMRuc]||'').trim());
     var nro=String(row[cMNro]||'').trim();
     if(!ruc||!nro) continue;
