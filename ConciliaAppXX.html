@@ -2350,7 +2350,8 @@ function concilCompras(bufM, bufL){
       else if(h.includes('fecha')&&cMFecha<0) cMFecha=j;
       else if(h.includes('tipo')&&cMTipo<0) cMTipo=j;
       else if(h.includes('timbrado')&&cMTimb<0) cMTimb=j;
-      else if((h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
+      // Skip "Identificador del Comprobante" (CDC e-invoice) — pick only the real nro column
+      else if(!h.includes('identificador')&&(h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
       else if(h.includes('grav')&&h.includes('5')&&cMGrav5<0) cMGrav5=j;
       else if(h.includes('grav')&&h.includes('10')&&cMGrav10<0) cMGrav10=j;
       else if((h.includes('exenta')||h.includes('exento'))&&cMExenta<0) cMExenta=j;
@@ -2422,12 +2423,9 @@ function concilCompras(bufM, bufL){
       });
       break;
     }
-    // Also detect econt format: nomcom at 0, numeric-ish at 1, ruc at 3
-    if(hrow[0]==='nomcom'||(hrow[0]==='nomcom'||String(dataL[Math.min(i+1,dataL.length-1)][0]||'').includes('FACTURA'))){
-      if(cNro<0){ hL=i; cNomcom=0;cNro=1;cFecha=2;cProv=3;cGrav5=4;cGrav10=5;cExenta=6;cNomcli=7;cIva5=8;cIva10=9;cTimb=10; break; }
-    }
   }
-  if(hL<0){ hL=0; cNomcom=0;cNro=1;cFecha=2;cProv=3;cGrav5=4;cGrav10=5;cExenta=6;cNomcli=7;cIva5=8;cIva10=9;cTimb=10; }
+  // Fallback: FoxPro librocompra layout (nomcom=0,nrocomp=1,fechastock=2,gravada5=3,gravada10=4,exenta=5,nomcli=6,proveedor=7,...,timbrado=12)
+  if(hL<0){ hL=0; cNomcom=0;cNro=1;cFecha=2;cGrav5=3;cGrav10=4;cExenta=5;cNomcli=6;cProv=7;cTimb=12; }
 
   for(var r=hL+1;r<dataL.length;r++){
     var row=dataL[r];
@@ -2454,12 +2452,14 @@ function concilCompras(bufM, bufL){
     };
   }
 
-  // ── DEBUG (quitar luego) ──
+  // ── DEBUG ──
   var _mKeys=Object.keys(mapM), _lKeys=Object.keys(mapL);
-  console.log('[ConcilCompras] Marangatu: '+_mKeys.length+' entradas. Muestra:', _mKeys.slice(0,3));
-  console.log('[ConcilCompras] Libro:     '+_lKeys.length+' entradas. Muestra:', _lKeys.slice(0,3));
-  if(_mKeys.length===0) console.warn('[ConcilCompras] Marangatu vacío — revisar columnas. hM='+hM+' cMRuc='+cMRuc+' cMNro='+cMNro);
-  if(_lKeys.length===0) console.warn('[ConcilCompras] Libro vacío — revisar columnas. hL='+hL+' cProv='+cProv+' cNro='+cNro);
+  console.log('[ConcilCompras] Marangatu: '+_mKeys.length+' entradas | hM='+hM+' cMRuc='+cMRuc+' cMNro='+cMNro+' cMTotal='+cMTotal);
+  console.log('[ConcilCompras] Marangatu muestra claves:', _mKeys.slice(0,3));
+  var _mSample=dataM[hM+1]; if(_mSample) console.log('[ConcilCompras] Marangatu fila1 raw nro='+_mSample[cMNro]+' ruc='+_mSample[cMRuc]);
+  console.log('[ConcilCompras] Libro:     '+_lKeys.length+' entradas | hL='+hL+' cNro='+cNro+' cProv='+cProv);
+  console.log('[ConcilCompras] Libro muestra claves:', _lKeys.slice(0,3));
+  var _lSample=dataL[hL+1]; if(_lSample) console.log('[ConcilCompras] Libro fila1 raw nro='+_lSample[cNro>=0?cNro:1]+' prov='+_lSample[cProv>=0?cProv:7]);
 
   // ── 3. Cruce ──
   var rows=[];
