@@ -2313,12 +2313,17 @@ function concilCompras(bufM, bufL){
   function normRuc(r){ return String(r||'').trim().replace(/\s+/g,'').replace(/-\d{1,2}$/, ''); }
   function excelDateToStr(v){
     if(!v) return '';
-    if(typeof v === 'string' && v.match(/\d{4}-\d{2}-\d{2}/)) return v.split(' ')[0];
-    var n = parseFloat(v);
+    if(typeof v === 'string'){
+      if(v.match(/^\d{4}-\d{2}-\d{2}/)) return v.split(' ')[0]; // already ISO
+      var dm=v.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if(dm) return dm[3]+'-'+dm[2]+'-'+dm[1]; // DD/MM/YYYY → YYYY-MM-DD
+    }
+    var n=parseFloat(v);
     if(isNaN(n)) return String(v).split(' ')[0];
-    var d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    var d=new Date(Math.round((n-25569)*86400*1000));
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
+  var corteVal=document.getElementById('fecha-corte').value; // YYYY-MM-DD, empty = no cutoff
 
   // ── 1. Parsear Marangatu (CSV o XLSX) ──
   var mapM = {};
@@ -2375,6 +2380,8 @@ function concilCompras(bufM, bufL){
     // Only process facturas — skip notas de crédito, débito, autofacturas, etc.
     var tipo=String(row[cMTipo]||'').trim().toLowerCase();
     if(tipo&&!tipo.startsWith('factura')) continue;
+    var fechaM=excelDateToStr(row[cMFecha]);
+    if(corteVal&&fechaM&&fechaM>corteVal) continue;
     var ruc=normRuc(String(row[cMRuc]||'').trim());
     var nro=String(row[cMNro]||'').trim();
     if(!ruc||!nro) continue;
@@ -2388,7 +2395,7 @@ function concilCompras(bufM, bufL){
     if(!monto) continue;
     mapM[key]={
       ruc:ruc, nombre:String(row[cMNom]||'').trim(),
-      fecha:excelDateToStr(row[cMFecha]),
+      fecha:fechaM,
       tipo:String(row[cMTipo]||'FACTURA').trim(),
       nro:normNro(nro), nroRaw:nro,
       timbrado:String(row[cMTimb]||'').trim(),
@@ -2434,6 +2441,8 @@ function concilCompras(bufM, bufL){
 
   for(var r=hL+1;r<dataL.length;r++){
     var row=dataL[r];
+    var fechaL=excelDateToStr(cFecha>=0?row[cFecha]:'');
+    if(corteVal&&fechaL&&fechaL>corteVal) continue;
     var nro=String(row[cNro>=0?cNro:1]||'').trim();
     var prov=normRuc(String(row[cProv>=0?cProv:3]||'').trim());
     if(!nro||!prov||nro==='0') continue;
@@ -2453,7 +2462,7 @@ function concilCompras(bufM, bufL){
       total:total,
       grav5:grav5, grav10:grav10, exenta:exenta,
       timb:String(row[cTimb>=0?cTimb:10]||'').trim(),
-      fecha:excelDateToStr(cFecha>=0?row[cFecha]:'')
+      fecha:fechaL
     };
   }
 
