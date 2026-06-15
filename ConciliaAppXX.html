@@ -2454,6 +2454,13 @@ function concilCompras(bufM, bufL){
     };
   }
 
+  // ── DEBUG (quitar luego) ──
+  var _mKeys=Object.keys(mapM), _lKeys=Object.keys(mapL);
+  console.log('[ConcilCompras] Marangatu: '+_mKeys.length+' entradas. Muestra:', _mKeys.slice(0,3));
+  console.log('[ConcilCompras] Libro:     '+_lKeys.length+' entradas. Muestra:', _lKeys.slice(0,3));
+  if(_mKeys.length===0) console.warn('[ConcilCompras] Marangatu vacío — revisar columnas. hM='+hM+' cMRuc='+cMRuc+' cMNro='+cMNro);
+  if(_lKeys.length===0) console.warn('[ConcilCompras] Libro vacío — revisar columnas. hL='+hL+' cProv='+cProv+' cNro='+cNro);
+
   // ── 3. Cruce ──
   var rows=[];
   var matchedL={};
