@@ -1881,8 +1881,33 @@ var ST = {files: {}, rows: [], filtered: [], page: 1, perPage: 50, charts: {}, h
 var API_BASE = 'https://conciliaapp-production.up.railway.app';
 function apiToken(){ return localStorage.getItem('token') || ''; }
 
-function loadHist(){try{ST.history = JSON.parse(localStorage.getItem('concilia_hist') || '[]');}catch(e){ST.history = [];}}
-function saveHist(){localStorage.setItem('concilia_hist', JSON.stringify(ST.history));}
+// Compact row storage: arrays use ~57% less space than named-field objects
+function _r2a(r){return[r.sistema||'',r.fecha||'',r.trx||'',r.nroRaw||'',r.cliente||'',r.ruc||'',r.factura||'',r.impPortal,r.impSys,r.diff,r.sinCruz?1:0,r.estado||'',r.causa||''];}
+function _a2r(a){return{sistema:a[0],fecha:a[1],trx:a[2],nroRaw:a[3],cliente:a[4],ruc:a[5],factura:a[6],impPortal:a[7],impSys:a[8],diff:a[9],sinCruz:!!a[10],estado:a[11],causa:a[12]};}
+function loadHist(){
+  try{
+    var raw=JSON.parse(localStorage.getItem('concilia_hist')||'[]');
+    ST.history=raw.map(function(h){
+      return{date:h.date,ts:h.ts,cloud_id:h.cloud_id,
+        rows:Array.isArray(h.rows)&&h.rows.length&&Array.isArray(h.rows[0])
+          ?h.rows.map(_a2r) // compact array format
+          :(h.rows||[])};   // legacy object format
+    });
+  }catch(e){ST.history=[];}
+}
+function saveHist(){
+  var compact=ST.history.map(function(h){return{date:h.date,ts:h.ts,cloud_id:h.cloud_id,rows:h.rows.map(_r2a)};});
+  for(var _t=0;_t<30;_t++){
+    try{localStorage.setItem('concilia_hist',JSON.stringify(compact));return;}
+    catch(e){
+      var isQuota=e.name==='QuotaExceededError'||e.code===22||(e.message||'').toLowerCase().includes('quota');
+      if(isQuota&&compact.length>1){
+        compact.sort(function(a,b){return b.ts-a.ts;});
+        compact.pop(); ST.history.sort(function(a,b){return b.ts-a.ts;}); ST.history.pop();
+      }else{if(isQuota)showToast('Cuota local superada — exporta un backup');return;}
+    }
+  }
+}
 loadHist();
 
 // ══ SINCRONIZACIÓN NUBE — CARGA AL LOGIN ══
