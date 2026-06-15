@@ -2301,30 +2301,38 @@ function concilCompras(bufM, bufL){
   var sh  = wbM.Sheets[wbM.SheetNames[0]];
   var dataM = XLSX.utils.sheet_to_json(sh, {header:1, defval:''});
 
-  // Dynamic column detection for Marangatu header
+  // Dynamic column detection: pick the row with the MOST keyword matches
+  // (avoids triggering on metadata rows like "RUC del Contribuyente: XXXXX")
   var hM=0;
   var cMRuc=-1, cMNom=-1, cMFecha=-1, cMTipo=-1, cMNro=-1, cMTimb=-1;
   var cMGrav5=-1, cMGrav10=-1, cMExenta=-1, cMIva5=-1, cMIva10=-1, cMTotal=-1;
-  for(var i=0;i<Math.min(5,dataM.length);i++){
-    var hrow=dataM[i].map(function(h){ return String(h||'').toLowerCase().trim(); });
-    if(hrow.some(function(h){ return h.includes('ruc')||h.includes('comprobante')||h.includes('timbrado'); })){
-      hM=i;
-      hrow.forEach(function(h,j){
-        if(h.includes('ruc')&&cMRuc<0) cMRuc=j;
-        else if((h.includes('nombre')||h.includes('razon')||h.includes('razón'))&&cMNom<0) cMNom=j;
-        else if(h.includes('fecha')&&cMFecha<0) cMFecha=j;
-        else if(h.includes('tipo')&&cMTipo<0) cMTipo=j;
-        else if((h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
-        else if(h.includes('timbrado')&&cMTimb<0) cMTimb=j;
-        else if(h.includes('grav')&&h.includes('5')&&cMGrav5<0) cMGrav5=j;
-        else if(h.includes('grav')&&h.includes('10')&&cMGrav10<0) cMGrav10=j;
-        else if((h.includes('exenta')||h.includes('exento'))&&cMExenta<0) cMExenta=j;
-        else if(h.includes('iva')&&h.includes('5')&&cMIva5<0) cMIva5=j;
-        else if(h.includes('iva')&&h.includes('10')&&cMIva10<0) cMIva10=j;
-        else if((h==='total'||h==='monto'||h==='monto total')&&cMTotal<0) cMTotal=j;
-      });
-      break;
-    }
+  var _bestHits=0;
+  for(var i=0;i<Math.min(10,dataM.length);i++){
+    var _hr=dataM[i].map(function(h){ return String(h||'').toLowerCase().trim(); });
+    var _cnt=_hr.filter(function(h){
+      return h&&(h.includes('ruc')||h.includes('comprobante')||h.includes('fecha')||
+        h.includes('timbrado')||h.includes('grav')||h.includes('iva')||
+        h.includes('nombre')||h.includes('razon')||h.includes('tipo')||
+        h.includes('exenta')||h==='total'||h.includes('nro')||h.includes('número'));
+    }).length;
+    if(_cnt>_bestHits){ _bestHits=_cnt; hM=i; }
+  }
+  if(_bestHits>=3){
+    var hrow=dataM[hM].map(function(h){ return String(h||'').toLowerCase().trim(); });
+    hrow.forEach(function(h,j){
+      if(h.includes('ruc')&&cMRuc<0) cMRuc=j;
+      else if((h.includes('nombre')||h.includes('razon')||h.includes('razón'))&&cMNom<0) cMNom=j;
+      else if(h.includes('fecha')&&cMFecha<0) cMFecha=j;
+      else if(h.includes('tipo')&&cMTipo<0) cMTipo=j;
+      else if(h.includes('timbrado')&&cMTimb<0) cMTimb=j;
+      else if((h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
+      else if(h.includes('grav')&&h.includes('5')&&cMGrav5<0) cMGrav5=j;
+      else if(h.includes('grav')&&h.includes('10')&&cMGrav10<0) cMGrav10=j;
+      else if((h.includes('exenta')||h.includes('exento'))&&cMExenta<0) cMExenta=j;
+      else if(h.includes('iva')&&h.includes('5')&&cMIva5<0) cMIva5=j;
+      else if(h.includes('iva')&&h.includes('10')&&cMIva10<0) cMIva10=j;
+      else if((h==='total'||h==='monto'||h==='monto total')&&cMTotal<0) cMTotal=j;
+    });
   }
   // Fallback positions (typical Marangatu COMPRAS layout)
   if(cMRuc<0)   cMRuc=1;   if(cMNom<0)   cMNom=2;
