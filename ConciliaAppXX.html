@@ -486,6 +486,11 @@ body{
 .di{background:var(--primary-f);color:var(--primary);border:1px solid var(--primary-b);}
 .dn2{background:var(--bg3);color:var(--tx2);border:1px solid var(--border);}
 .dp2{background:var(--amberb);color:var(--amber);border:1px solid rgba(251,191,36,0.2);}
+.dc2{background:rgba(20,184,166,.15);color:var(--teal);border:1px solid rgba(20,184,166,.2);}
+.corte-row{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:18px;}
+.corte-lbl{font-size:13px;color:var(--tx2);font-weight:600;white-space:nowrap;}
+.corte-dt{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:7px 14px;color:var(--tx);font-size:13px;font-family:inherit;outline:none;cursor:pointer;}
+.corte-dt:focus{border-color:var(--primary);}
 .dc-stat{font-size:13px;font-weight:600;}
 .ok2{color:var(--teal)}.err2{color:var(--red)}
 .dc-chev{color:var(--tx3);font-size:12px;transition:transform .3s cubic-bezier(0.16, 1, 0.3, 1);}
@@ -1312,6 +1317,10 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       </div>
     
     <div class="run-wrap">
+      <div class="corte-row">
+        <label class="corte-lbl">Fecha de Corte</label>
+        <input type="date" id="fecha-corte" class="corte-dt">
+      </div>
       <button class="run-main" id="run-btn" disabled onclick="runConcil()">Procesar Conciliación ▸</button>
       <div class="run-note" id="run-note">Carga al menos un par de archivos origen o usa el Generador Demo para iniciar el motor.</div>
     </div>
@@ -1856,6 +1865,8 @@ function toggleTheme(){
 
 // Asignar fecha en Topbar
 document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-PY', {weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'}).toUpperCase();
+// Default fecha-corte to today
+(function(){ var el = document.getElementById('fecha-corte'); if(el) el.value = new Date().toISOString().split('T')[0]; })();
 
 // Toast Notificaciones
 function showToast(msg){
@@ -2459,8 +2470,19 @@ function runConcil(){
       }
       
       setP(95, 'Archivando histórico corporativo...');
-      var idx = ST.history.findIndex(function(h){ return h.date === today; });
-      var entry = {date: today, ts: Date.now(), rows: ST.rows};
+      // Filter rows to the selected corte date only (avoids re-including prior days from cumulative files)
+      var corteVal = document.getElementById('fecha-corte').value; // YYYY-MM-DD
+      if(corteVal){
+        ST.rows = ST.rows.filter(function(r){ return r.fecha === corteVal; });
+      }
+      // History key = the corte date (not the run date), so each cutoff accumulates independently
+      var corteDate = today;
+      if(corteVal){
+        var _cd = new Date(corteVal + 'T12:00:00');
+        corteDate = _cd.toLocaleDateString('es-PY', {day:'2-digit', month:'2-digit', year:'numeric'});
+      }
+      var idx = ST.history.findIndex(function(h){ return h.date === corteDate; });
+      var entry = {date: corteDate, ts: Date.now(), rows: ST.rows};
       if(idx >= 0) { entry.cloud_id = ST.history[idx].cloud_id; ST.history[idx] = entry; }
       else ST.history.unshift(entry);
       ST.history.sort(function(a,b){ return b.ts - a.ts; });
@@ -2512,12 +2534,14 @@ function renderHist(){
     var has = {
       i: rows.some(function(r){ return r.sistema === 'infonet'; }),
       n: rows.some(function(r){ return r.sistema === 'netel'; }),
-      p: rows.some(function(r){ return r.sistema === 'pronet'; })
+      p: rows.some(function(r){ return r.sistema === 'pronet'; }),
+      c: rows.some(function(r){ return r.sistema === 'compras'; })
     };
     var sys = [
       has.i ? '<span class="dpill di">Infonet</span>' : '',
       has.n ? '<span class="dpill dn2">Netel</span>' : '',
-      has.p ? '<span class="dpill dp2">Pronet</span>' : ''
+      has.p ? '<span class="dpill dp2">Pronet</span>' : '',
+      has.c ? '<span class="dpill dc2">Compras</span>' : ''
     ].join('');
     
     var dt = diffs.length === 0 ? '✓ Cuadrado perfecto' : fmt2(diffs.length) + ' desviaciones · Gs. ' + fmt(monto);
