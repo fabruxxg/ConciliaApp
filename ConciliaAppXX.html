@@ -2321,7 +2321,7 @@ function concilCompras(bufM, bufL){
     var n=parseFloat(v);
     if(isNaN(n)) return String(v).split(' ')[0];
     var d=new Date(Math.round((n-25569)*86400*1000));
-    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
   }
   var corteVal=document.getElementById('fecha-corte').value; // YYYY-MM-DD, empty = no cutoff
 
