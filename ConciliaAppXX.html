@@ -1893,7 +1893,7 @@ function showToast(msg){
 }
 
 // ══ ESTADOS GLOBALES ══
-var ST = {files: {}, rows: [], sessionRows: [], filtered: [], page: 1, perPage: 50, charts: {}, history: []};
+var ST = {files: {}, rows: [], sessionRows: [], filtered: [], page: 1, perPage: 50, charts: {}, history: [], comprasStats: null};
 var API_BASE = 'https://conciliaapp-production.up.railway.app';
 function apiToken(){ return localStorage.getItem('token') || ''; }
 
@@ -2398,18 +2398,21 @@ function concilCompras(bufM, bufL){
   if(cMExenta<0)cMExenta=9;if(cMIva5<0)  cMIva5=10;
   if(cMIva10<0) cMIva10=11;if(cMTotal<0) cMTotal=7;
 
+  var cntMTotal=0, cntMNoFact=0, cntMCorte=0, cntMDup=0;
   for(var r=hM+1;r<dataM.length;r++){
     var row=dataM[r];
+    if(row.every(function(c){ return !c; })) continue; // skip blank rows
+    cntMTotal++;
     // Only process facturas — skip notas de crédito, débito, autofacturas, etc.
     var tipo=String(row[cMTipo]||'').trim().toLowerCase();
-    if(tipo&&!tipo.startsWith('factura')) continue;
+    if(tipo&&!tipo.startsWith('factura')){ cntMNoFact++; continue; }
     var fechaM=excelDateToStr(row[cMFecha]);
-    if(corteVal&&fechaM&&fechaM>corteVal) continue;
+    if(corteVal&&fechaM&&fechaM>corteVal){ cntMCorte++; continue; }
     var ruc=normRuc(String(row[cMRuc]||'').trim());
     var nro=String(row[cMNro]||'').trim();
     if(!ruc||!nro) continue;
     var key=normNro(nro)+'_'+ruc;
-    if(mapM[key]) continue;
+    if(mapM[key]){ cntMDup++; continue; }
     // Monto: use explicit total col if present; otherwise sum all components
     var g5=num(row[cMGrav5]),g10=num(row[cMGrav10]),ex=num(row[cMExenta]);
     var i5=num(row[cMIva5]),i10=num(row[cMIva10]);
@@ -2522,6 +2525,16 @@ function concilCompras(bufM, bufL){
     });
   });
 
+  // Attach parse stats so the export can show them
+  rows._stats = {
+    maranTotal: cntMTotal,
+    maranNoFact: cntMNoFact,
+    maranCorte: cntMCorte,
+    maranDup: cntMDup,
+    maranProcesadas: Object.keys(mapM).length,
+    libroTotal: Object.keys(mapL).length + Object.keys(matchedL).length,
+    libroProcesadas: Object.keys(mapL).length + Object.keys(matchedL).length
+  };
   return rows;
 }
 // ══ EJECUCIÓN CONCILIADORA MULTIPRESERVADA ══
@@ -2563,6 +2576,7 @@ function runConcil(){
             setP(88, 'Conciliando Libro de Compras vs Marangatu...');
             var rc = concilCompras(ST.files.mp, ST.files.ls);
             ST.rows.push.apply(ST.rows, rc);
+            ST.comprasStats = rc._stats || null;
           }
         } catch(err) {
           customAlert('Fallo del Motor de Cruce', 'Error al leer archivos reales: ' + err.message);
@@ -2982,19 +2996,27 @@ function exportComprasXlsx(rows, filename){
   var corteUsado = document.getElementById('fecha-corte').value || 'Sin filtro de fecha';
 
   // ── Hoja 1: Resumen ──
+  var st = ST.comprasStats;
   var res=[
     ['CONCILIACIÓN LIBRO DE COMPRAS vs MARANGATU (SET)'],
     ['Fecha de Corte utilizada:', corteUsado],
     ['Generado el:', new Date().toLocaleDateString('es-PY')],
     [],
-    ['Estado','Cantidad','Descripción'],
+    ['ORIGEN DE DATOS — MARANGATU'],
+    ['Total filas en archivo Marangatu', st ? st.maranTotal : '—'],
+    ['  Notas de crédito / otros (excluidos)', st ? st.maranNoFact : '—'],
+    ['  Facturas fuera de corte (excluidas)', st ? st.maranCorte : '—'],
+    ['  Duplicados de clave (excluidos)', st ? st.maranDup : '—'],
+    ['  FACTURAS PROCESADAS', st ? st.maranProcesadas : falt.length+conc.length+difs.length],
+    [],
+    ['RESULTADO DEL CRUCE','Cantidad','Descripción'],
     ['Sí en Libro — montos iguales',conc.length,'Facturas que coinciden en ambos sistemas sin diferencia de monto'],
     ['Sí en Libro — diferencia de monto',difs.length,'Facturas presentes en ambos pero con importes distintos'],
     ['No en Libro (FALTANTES)',falt.length,'Facturas en Marangatu que NO están en el Libro de Compras'],
     ['Solo en Libro',solo.length,'Facturas en el Libro que NO están declaradas en Marangatu'],
     [],
-    ['Total en Marangatu',falt.length+conc.length+difs.length],
-    ['Total en Libro de Compras',conc.length+difs.length+solo.length],
+    ['Total facturas procesadas Marangatu', falt.length+conc.length+difs.length],
+    ['Total facturas procesadas Libro',     conc.length+difs.length+solo.length],
   ];
   var wsRes=XLSX.utils.aoa_to_sheet(res);
   wsRes['!cols']=[{wch:38},{wch:12},{wch:55}];
