@@ -2320,9 +2320,10 @@ function readSheet(buf, skip){
 // ══ CONCILIACIÓN LIBRO COMPRAS vs MARANGATU (SET) ══
 function concilCompras(bufM, bufL){
   // ── Helpers ──
-  function normNro(n){ var s = String(n||'').trim().replace(/-/g,'').replace(/^0+/,''); return s || '0'; }
-  // Strip RUC check digit: "80014137-5" → "80014137", also trims spaces
-  function normRuc(r){ return String(r||'').trim().replace(/\s+/g,'').replace(/-\d{1,2}$/, ''); }
+  // Strip any non-numeric separator (dash, dot, space, slash) then remove leading zeros
+  function normNro(n){ var s = String(n||'').replace(/[^0-9]/g,'').replace(/^0+/,''); return s || '0'; }
+  // Strip check digit (after last dash) then keep only digits — handles dots "80.049.965-5" → "80049965"
+  function normRuc(r){ var s = String(r||'').trim().replace(/-\d{1,2}$/, ''); return s.replace(/[^0-9]/g,'') || s.trim(); }
   function excelDateToStr(v){
     if(!v) return '';
     if(typeof v === 'string'){
@@ -2407,7 +2408,6 @@ function concilCompras(bufM, bufL){
     var i5=num(row[cMIva5]),i10=num(row[cMIva10]);
     var tot=num(row[cMTotal]);
     var monto = tot>0 ? tot : g5+i5+g10+i10+ex;
-    if(!monto) continue;
     mapM[key]={
       ruc:ruc, nombre:String(row[cMNom]||'').trim(),
       fecha:fechaM,
@@ -2467,8 +2467,8 @@ function concilCompras(bufM, bufL){
     var iva5=cIva5>=0?num(row[cIva5]):Math.round(grav5*0.05);
     var iva10=cIva10>=0?num(row[cIva10]):Math.round(grav10*0.10);
     var total=grav5+iva5+grav10+iva10+exenta;
-    if(!total) continue;
     var key=normNro(nro)+'_'+prov;
+    if(mapL[key]) continue; // keep first occurrence, consistent with mapM
     mapL[key]={
       tipo:String(row[cNomcom>=0?cNomcom:0]||'FACTURA').trim(),
       nro:normNro(nro), nroRaw:nro,
