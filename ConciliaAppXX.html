@@ -1874,8 +1874,15 @@ function toggleTheme(){
 
 // Asignar fecha en Topbar
 document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-PY', {weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'}).toUpperCase();
-// Default fecha-corte to today
-(function(){ var el = document.getElementById('fecha-corte'); if(el) el.value = new Date().toISOString().split('T')[0]; })();
+// Default fecha-corte to yesterday (conciliaciones se hacen al día anterior)
+(function(){
+  var el = document.getElementById('fecha-corte');
+  if(el){
+    var ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    el.value = ayer.toISOString().split('T')[0];
+  }
+})();
 
 // Toast Notificaciones
 function showToast(msg){
@@ -2972,10 +2979,13 @@ function exportComprasXlsx(rows, filename){
   var difs=cr.filter(function(r){return !r.sinCruz&&r.impPortal!==null&&Math.abs(r.diff)>0.5;});
   var solo=cr.filter(function(r){return r.impPortal===null;});
   var wb=XLSX.utils.book_new();
+  var corteUsado = document.getElementById('fecha-corte').value || 'Sin filtro de fecha';
 
   // ── Hoja 1: Resumen ──
   var res=[
     ['CONCILIACIÓN LIBRO DE COMPRAS vs MARANGATU (SET)'],
+    ['Fecha de Corte utilizada:', corteUsado],
+    ['Generado el:', new Date().toLocaleDateString('es-PY')],
     [],
     ['Estado','Cantidad','Descripción'],
     ['Sí en Libro — montos iguales',conc.length,'Facturas que coinciden en ambos sistemas sin diferencia de monto'],
