@@ -1886,7 +1886,7 @@ function showToast(msg){
 }
 
 // ══ ESTADOS GLOBALES ══
-var ST = {files: {}, rows: [], filtered: [], page: 1, perPage: 50, charts: {}, history: []};
+var ST = {files: {}, rows: [], sessionRows: [], filtered: [], page: 1, perPage: 50, charts: {}, history: []};
 var API_BASE = 'https://conciliaapp-production.up.railway.app';
 function apiToken(){ return localStorage.getItem('token') || ''; }
 
@@ -1986,7 +1986,10 @@ function goTo(name, el){
   if(el) el.classList.add('on');
   document.getElementById('tb-page').textContent = pageNames[name] || name;
   if(name === 'hist') renderHist();
-  if(name === 'dash' && ST.rows.length) renderDash(ST.rows);
+  if(name === 'dash'){
+    var dashRows = ST.sessionRows.length ? ST.sessionRows : ST.rows;
+    if(dashRows.length) renderDash(dashRows);
+  }
   if(name === 'tbl'){ ST.filtered = ST.rows; renderTbl(); }
 }
 
@@ -2581,11 +2584,12 @@ function runConcil(){
       saveHist();
       guardarSesionNube(entry); // sync a Railway en segundo plano
       
+      ST.sessionRows = ST.rows.slice(); // snapshot de esta sesión — nunca se pisa con viewDay
       setP(100, 'Motor sincronizado de manera exitosa');
       setTimeout(function(){
         document.getElementById('dash-prog').style.display = 'none';
         document.getElementById('dash-content').style.display = 'block';
-        renderDash(ST.rows);
+        renderDash(ST.sessionRows);
         ST.filtered = ST.rows;
         renderTbl();
         init3DTilt(); // Aplica 3D tilt a las nuevas tarjetas
