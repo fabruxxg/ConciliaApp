@@ -2713,24 +2713,55 @@ function clearHist(){
 function renderDash(rows){
   if(!rows || !rows.length) return;
   document.getElementById('dash-period').textContent = 'ANÁLISIS DE CORRESPONDENCIA VIGENTE · ' + fmt2(rows.length) + ' TRANSACCIONES';
-  var diffs = rows.filter(function(r){ return Math.abs(r.diff) > 0.5; });
-  var ok = rows.filter(function(r){ return Math.abs(r.diff) <= 0.5; });
-  var monto = diffs.reduce(function(a,r){ return a + Math.abs(r.diff); }, 0);
-  
+
+  var comprasRows = rows.filter(function(r){ return r.sistema === 'compras'; });
+  var otherRows   = rows.filter(function(r){ return r.sistema !== 'compras'; });
+  // compras "ok" = actually matched in both files with no amount diff
+  var cConc = comprasRows.filter(function(r){ return !r.sinCruz && r.impPortal !== null && Math.abs(r.diff) <= 0.5; }).length;
+  var cIssue = comprasRows.length - cConc;
+  var okCount    = otherRows.filter(function(r){ return Math.abs(r.diff) <= 0.5; }).length + cConc;
+  var diffsCount = otherRows.filter(function(r){ return Math.abs(r.diff) > 0.5; }).length + cIssue;
+  var monto = rows.reduce(function(a,r){
+    if(r.sistema === 'compras'){
+      if(r.sinCruz)           return a + (r.impPortal || 0);
+      if(r.impPortal === null) return a + (r.impSys   || 0);
+      return a + (Math.abs(r.diff) > 0.5 ? Math.abs(r.diff) : 0);
+    }
+    return a + (Math.abs(r.diff) > 0.5 ? Math.abs(r.diff) : 0);
+  }, 0);
+
   document.getElementById('dash-metrics').innerHTML = [
-    {icon:'📊', label:'Volumen Mapeado', val:fmt2(rows.length), sub:'Transacciones procesadas', c:'var(--primary)'},
-    {icon:'✓', label:'Cruces Correctos', val:fmt2(ok.length), sub:pct(ok.length,rows.length)+' tasa de exactitud', cls:'vg', c:'var(--teal)'},
-    {icon:'⚠', label:'Casos de Diferencia', val:fmt2(diffs.length), sub:pct(diffs.length,rows.length)+' tasa de desvío', cls:'vr', c:'var(--red)'},
-    {icon:'💰', label:'Importe Desviado', val:'Gs. '+fmt(monto), sub:'Valor expuesto en conflicto', cls:'va', c:'var(--amber)'}
+    {icon:'📊', label:'Volumen Mapeado',    val:fmt2(rows.length),    sub:'Transacciones procesadas',       c:'var(--primary)'},
+    {icon:'✓',  label:'Cruces Correctos',   val:fmt2(okCount),        sub:pct(okCount,rows.length)+' tasa de exactitud',  cls:'vg', c:'var(--teal)'},
+    {icon:'⚠',  label:'Casos con Diferencia',val:fmt2(diffsCount),   sub:pct(diffsCount,rows.length)+' tasa de desvío', cls:'vr', c:'var(--red)'},
+    {icon:'💰', label:'Importe Expuesto',   val:'Gs. '+fmt(monto),    sub:'Valor total en conflicto',        cls:'va', c:'var(--amber)'}
   ].map(function(m){
-    return '<div class="mc card-tilt"><div class="mc-glow-spot" style="background:'+m.c+'"></div><div class="mc-icon" style="color:'+m.c+'">'+m.icon+'</div><div class="mc-lbl">'+m.label+'</div><div class="mc-val '+m.cls+'">'+m.val+'</div><div class="mc-sub">'+m.sub+'</div></div>';
+    return '<div class="mc card-tilt"><div class="mc-glow-spot" style="background:'+m.c+'"></div><div class="mc-icon" style="color:'+m.c+'">'+m.icon+'</div><div class="mc-lbl">'+m.label+'</div><div class="mc-val '+(m.cls||'')+'">'+m.val+'</div><div class="mc-sub">'+m.sub+'</div></div>';
   }).join('');
-  
+
   var SIS = ['infonet','netel','pronet','compras'];
-  var SN = ['Infonet', 'Netel', 'Pronet', 'Compras'];
-  var SE = ['🟢', '🔵', '🟠'];
+  var SN  = ['Infonet', 'Netel', 'Pronet', 'Compras'];
+  var SE  = ['🟢', '🔵', '🟠', '🔴'];
   document.getElementById('dash-panels').innerHTML = SIS.map(function(s,i){
     var sr = rows.filter(function(r){ return r.sistema === s; });
+    if(s === 'compras'){
+      var cC  = sr.filter(function(r){ return !r.sinCruz && r.impPortal !== null && Math.abs(r.diff) <= 0.5; }).length;
+      var cF  = sr.filter(function(r){ return r.sinCruz; }).length;
+      var cD  = sr.filter(function(r){ return !r.sinCruz && r.impPortal !== null && Math.abs(r.diff) > 0.5; }).length;
+      var cSL = sr.filter(function(r){ return r.impPortal === null; }).length;
+      var issues = cF + cD + cSL;
+      var cl = issues === 0 ? 'bok' : issues < 5 ? 'bw' : 'brr';
+      return '<div class="sp card-tilt">'+
+        '<div class="sp-hd"><span class="sp-name">'+SE[i]+' '+SN[i]+'</span><span class="sp-bk '+cl+'">'+(issues === 0 ? 'Cuadrado' : issues + ' alertas')+'</span></div>'+
+        '<div class="sp-bd">'+
+          '<div class="sp-row"><span class="spk">Mapeadas</span><span class="spv">'+fmt2(sr.length)+'</span></div>'+
+          '<div class="sp-row"><span class="spk">Conciliadas</span><span class="spv" style="color:var(--teal)">'+fmt2(cC)+'</span></div>'+
+          '<div class="sp-row"><span class="spk">Faltantes en Libro</span><span class="spv" style="color:var(--red)">'+fmt2(cF)+'</span></div>'+
+          '<div class="sp-row"><span class="spk">Dif. de Importe</span><span class="spv" style="color:var(--amber)">'+fmt2(cD)+'</span></div>'+
+          '<div class="sp-row"><span class="spk">Solo en Libro</span><span class="spv" style="color:var(--tx3)">'+fmt2(cSL)+'</span></div>'+
+        '</div>'+
+      '</div>';
+    }
     var sd = sr.filter(function(r){ return Math.abs(r.diff) > 0.5; });
     var sm = sd.reduce(function(a,r){ return a + Math.abs(r.diff); }, 0);
     var cl = sd.length === 0 ? 'bok' : sd.length < 5 ? 'bw' : 'brr';
@@ -2744,51 +2775,61 @@ function renderDash(rows){
       '</div>'+
     '</div>';
   }).join('');
-  
+
   buildCharts(rows, SIS, SN);
-  setTimeout(init3DTilt, 50); // Reactivar tilt para dashboard renderizado
+  setTimeout(init3DTilt, 50);
 }
 
 function buildCharts(rows, SIS, SN){
-  var SC = [getThemeColor('teal'), getThemeColor('primary'), getThemeColor('amber')];
+  var SC = [getThemeColor('teal'), getThemeColor('primary'), getThemeColor('amber'), getThemeColor('red')];
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   Chart.defaults.color = isDark ? '#cbb8ae' : '#846f63';
   Chart.defaults.borderColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-  
+
   ['ch1','ch2','ch3','ch4'].forEach(function(id){ if(ST.charts[id]){ ST.charts[id].destroy(); delete ST.charts[id]; } });
-  
+
   var opts = {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, cutout: '72%'};
   var sc = SIS.map(function(s){ return rows.filter(function(r){ return r.sistema === s; }).length; });
-  
+
   document.getElementById('leg1').innerHTML = SN.map(function(n,i){
     return '<span><span class="ld" style="background:'+SC[i]+'"></span>'+n+' ('+fmt2(sc[i])+')</span>';
   }).join('');
-  
+
   ST.charts.ch1 = new Chart(document.getElementById('ch1'), {
     type: 'doughnut',
     data: {labels: SN, datasets: [{data: sc, backgroundColor: SC, borderWidth: 0, hoverOffset: 6}]},
     options: opts
   });
-  
-  var ec = {}; rows.forEach(function(r){ var e = r.estado || 'N/D'; ec[e] = (ec[e]||0) + 1; });
+
+  // ch2: estado breakdown — exclude compras rows (their estado = "FACTURA" is not a meaningful status)
+  var ec = {};
+  rows.filter(function(r){ return r.sistema !== 'compras'; })
+      .forEach(function(r){ var e = r.estado || 'N/D'; ec[e] = (ec[e]||0) + 1; });
   var eL = Object.keys(ec);
   var eC = eL.map(function(e){
     return e==='Aprobado'?getThemeColor('teal'):e==='Reversado'?getThemeColor('red'):e==='Anulado'?getThemeColor('amber'):e==='Confirmado'?getThemeColor('primary'):(isDark?'#3f3f46':'#cbd5e1');
   });
-  
-  document.getElementById('leg2').innerHTML = eL.map(function(l,i){
+
+  document.getElementById('leg2').innerHTML = eL.length ? eL.map(function(l,i){
     return '<span><span class="ld" style="background:'+eC[i]+'"></span>'+l+' ('+fmt2(ec[l])+')</span>';
-  }).join('');
-  
+  }).join('') : '<span style="color:var(--tx3)">Sin datos de estado</span>';
+
   ST.charts.ch2 = new Chart(document.getElementById('ch2'), {
     type: 'doughnut',
-    data: {labels: eL, datasets: [{data: eL.map(function(e){ return ec[e]; }), backgroundColor: eC, borderWidth: 0, hoverOffset: 6}]},
+    data: {labels: eL.length ? eL : ['Sin datos'], datasets: [{data: eL.length ? eL.map(function(e){ return ec[e]; }) : [1], backgroundColor: eL.length ? eC : [isDark?'#3f3f46':'#cbd5e1'], borderWidth: 0, hoverOffset: 6}]},
     options: opts
   });
-  
-  var dc = SIS.map(function(s){ return rows.filter(function(r){ return r.sistema===s && Math.abs(r.diff) > 0.5; }).length; });
-  var oc = SIS.map(function(s){ return rows.filter(function(r){ return r.sistema===s && Math.abs(r.diff) <= 0.5; }).length; });
-  
+
+  // ch3: match vs alertas — for compras, "alertas" = sinCruz + impPortal===null + amount diffs; "match" = conciliados
+  var dc = SIS.map(function(s){
+    if(s === 'compras') return rows.filter(function(r){ return r.sistema===s && (r.sinCruz || r.impPortal===null || Math.abs(r.diff)>0.5); }).length;
+    return rows.filter(function(r){ return r.sistema===s && Math.abs(r.diff) > 0.5; }).length;
+  });
+  var oc = SIS.map(function(s){
+    if(s === 'compras') return rows.filter(function(r){ return r.sistema===s && !r.sinCruz && r.impPortal!==null && Math.abs(r.diff)<=0.5; }).length;
+    return rows.filter(function(r){ return r.sistema===s && Math.abs(r.diff) <= 0.5; }).length;
+  });
+
   ST.charts.ch3 = new Chart(document.getElementById('ch3'), {
     type: 'bar',
     data: {
@@ -2800,8 +2841,18 @@ function buildCharts(rows, SIS, SN){
     },
     options: {responsive: true, maintainAspectRatio: false, scales: {x: {stacked: true}, y: {stacked: true}}, plugins: {legend: {display: false}}}
   });
-  
-  var mc = SIS.map(function(s){ return rows.filter(function(r){ return r.sistema===s; }).reduce(function(a,r){ return a + Math.abs(r.diff); }, 0); });
+
+  // ch4: importe expuesto por sistema — for compras sum faltantes monto + solo monto + amount diffs
+  var mc = SIS.map(function(s){
+    return rows.filter(function(r){ return r.sistema===s; }).reduce(function(a,r){
+      if(r.sistema === 'compras'){
+        if(r.sinCruz)           return a + (r.impPortal || 0);
+        if(r.impPortal === null) return a + (r.impSys   || 0);
+        return a + (Math.abs(r.diff) > 0.5 ? Math.abs(r.diff) : 0);
+      }
+      return a + Math.abs(r.diff);
+    }, 0);
+  });
   ST.charts.ch4 = new Chart(document.getElementById('ch4'), {
     type: 'bar',
     data: {labels: SN, datasets: [{data: mc, backgroundColor: SC, borderRadius: 6}]},
