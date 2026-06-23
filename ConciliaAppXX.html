@@ -2992,12 +2992,18 @@ function renderTbl(){
           }).join('');
         })();
 
-    // Columna "Con diferencia": facturas involucradas en el desvío (solo para infonet/netel/pronet)
+    // Columna "Con diferencia": facturas involucradas en el desvío o indicador de sin cruce
     var difList = isC
       ? '<span class="dze">-</span>'
       : (function(){
-          var difs = (r.facturasDif && r.facturasDif.length) ? r.facturasDif : [];
-          if(!difs.length) return '<span class="dze">-</span>';
+          // Pago registrado en portal pero sin ninguna entrada en el sistema
+          if(r.sinCruz) return '<span style="font-size:11px;color:var(--red);font-weight:600">No encontrado en sistema</span>';
+          var hasDiff = Math.abs(r.diff||0) > 0.5;
+          if(!hasDiff) return '<span class="dze">-</span>';
+          // Hay desvío: usar facturasDif primero, luego facturas como fallback
+          var difs = (r.facturasDif && r.facturasDif.length) ? r.facturasDif
+                   : (r.facturas && r.facturas.length) ? r.facturas : [];
+          if(!difs.length) return '<span style="font-size:11px;color:var(--amber)">Desvío · ver trx. '+r.trx+'</span>';
           return difs.map(function(f){
             return '<span class="mono" style="display:block;font-size:11.5px;line-height:1.6;color:var(--amber)">' + f + '</span>';
           }).join('');
