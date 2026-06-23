@@ -1542,6 +1542,31 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     <div class="page-sub">Candidatos evaluados vía WhatsApp. Los puntajes y clasificaciones son generados automáticamente por el proceso de screening.</div>
   </div>
 
+  <!-- PANEL BOT -->
+  <div class="card" id="bot-panel" style="margin-bottom:20px;padding:18px 20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span id="bot-dot" style="width:10px;height:10px;border-radius:50%;background:#dc2626;flex-shrink:0"></span>
+      <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3)">Agente Local</span>
+      <span id="bot-status-txt" style="font-size:12px;color:var(--tx3)">Buscando agente…</span>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <select id="bot-script" style="padding:6px 10px;border:1px solid var(--brd);border-radius:8px;background:var(--card);color:var(--tx1);font-size:12px;max-width:200px">
+          <option value="">— seleccionar script —</option>
+        </select>
+        <select id="bot-linea" style="padding:6px 10px;border:1px solid var(--brd);border-radius:8px;background:var(--card);color:var(--tx1);font-size:12px">
+          <option value="1">Línea 1</option>
+          <option value="2">Línea 2</option>
+        </select>
+        <input id="bot-sesion" placeholder="sesión ej: s9" style="padding:6px 10px;border:1px solid var(--brd);border-radius:8px;background:var(--card);color:var(--tx1);font-size:12px;width:110px">
+        <label style="font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="bot-upload" checked> Subir al terminar
+        </label>
+        <button class="act-btn primary" id="bot-start-btn" onclick="botStart()" disabled>▶ Iniciar Bot</button>
+        <button class="act-btn danger" id="bot-stop-btn" onclick="botStop()" style="display:none">◼ Detener</button>
+      </div>
+    </div>
+    <div id="bot-log" style="background:var(--bg);border:1px solid var(--brd);border-radius:8px;padding:12px;font-family:Courier New,monospace;font-size:11px;line-height:1.5;height:160px;overflow-y:auto;color:var(--tx2);white-space:pre-wrap">Ejecutá <b>ejecutar_agente.bat</b> en tu PC para habilitar el control del bot desde aquí.</div>
+  </div>
+
   <!-- FILTROS Y ACCIONES -->
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
     <select id="rc-linea" onchange="renderRecruit()" style="padding:7px 12px;border:1px solid var(--brd);border-radius:8px;background:var(--card);color:var(--tx1);font-size:13px">
@@ -2119,7 +2144,8 @@ function goTo(name, el){
     if(dashRows.length) renderDash(dashRows);
   }
   if(name === 'tbl'){ ST.filtered = ST.rows; renderTbl(); }
-  if(name === 'recruit'){ loadRecruit(); }
+  if(name === 'recruit'){ loadRecruit(); botPoll(); botPollStart(false); }
+  else { if(BOT.pollTimer){ clearInterval(BOT.pollTimer); BOT.pollTimer=null; } }
 }
 
 // ══ SELECCIÓN Y CARGA DE EXTRACTOS ══
@@ -4296,6 +4322,102 @@ function ejecutarSimulacionLocal(setP) {
 <script>
 // ══ RECLUTAMIENTO ══
 var RC = { candidates: [], filtered: [] };
+
+// ── BOT PANEL ────────────────────────────────────────────────────────
+var BOT = { agentUrl: 'http://localhost:3001', pollTimer: null, lastLogLen: 0, alive: false };
+
+function botPollStart(fast){
+  if(BOT.pollTimer) clearInterval(BOT.pollTimer);
+  BOT.pollTimer = setInterval(botPoll, fast ? 1500 : 5000);
+}
+
+function botPoll(){
+  fetch(BOT.agentUrl+'/status', {signal: AbortSignal.timeout(2000)})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      BOT.alive = true;
+      botUpdateUI(d);
+      // populate scripts dropdown once
+      var sel = document.getElementById('bot-script');
+      if(sel && d.scripts && d.scripts.length && sel.options.length <= 1){
+        sel.innerHTML = '<option value="">— seleccionar script —</option>';
+        d.scripts.forEach(function(s){ sel.innerHTML += '<option value="'+s+'">'+s+'</option>'; });
+      }
+    })
+    .catch(function(){
+      BOT.alive = false;
+      botUpdateUI({status:'offline'});
+    });
+}
+
+function botUpdateUI(d){
+  var dot  = document.getElementById('bot-dot');
+  var txt  = document.getElementById('bot-status-txt');
+  var sBtn = document.getElementById('bot-start-btn');
+  var xBtn = document.getElementById('bot-stop-btn');
+  var log  = document.getElementById('bot-log');
+  if(!dot) return;
+
+  var st = d.status || 'offline';
+  var colors = {idle:'#15803d', running:'#f97316', done:'#15803d', error:'#dc2626', offline:'#dc2626'};
+  var labels = {idle:'Agente listo', running:'Bot corriendo…', done:'Terminado ✓', error:'Error ✗', offline:'Agente no detectado — ejecutá ejecutar_agente.bat'};
+
+  dot.style.background = colors[st] || '#6b7280';
+  txt.textContent = labels[st] || st;
+
+  sBtn.disabled = (st !== 'idle' && st !== 'done' && st !== 'error') || st === 'offline';
+  xBtn.style.display = st === 'running' ? '' : 'none';
+  sBtn.style.display = st === 'running' ? 'none' : '';
+
+  // Log
+  if(d.logs && d.logs.length){
+    var joined = d.logs.join('');
+    if(joined.length !== BOT.lastLogLen){
+      BOT.lastLogLen = joined.length;
+      log.textContent = joined;
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  // After done, auto-refresh candidates
+  if((st === 'done' || st === 'error') && BOT._wasRunning){
+    BOT._wasRunning = false;
+    botPollStart(false);
+    if(st === 'done') setTimeout(loadRecruit, 1500);
+  }
+  if(st === 'running') BOT._wasRunning = true;
+}
+
+function botStart(){
+  var script = (document.getElementById('bot-script')||{}).value;
+  var linea  = parseInt((document.getElementById('bot-linea')||{}).value||1);
+  var sesion = ((document.getElementById('bot-sesion')||{}).value||'').trim();
+  var upload = (document.getElementById('bot-upload')||{}).checked !== false;
+
+  if(!script){ showToast('Seleccioná un script primero'); return; }
+
+  fetch(BOT.agentUrl+'/start', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({script, linea, sesion, upload_after: upload})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(d.error){ showToast('Error: '+d.error); return; }
+    document.getElementById('bot-log').textContent = '';
+    BOT.lastLogLen = 0;
+    BOT._wasRunning = true;
+    botPollStart(true);
+    showToast('Bot iniciado: '+script);
+  })
+  .catch(function(){ showToast('No se pudo contactar el agente local'); });
+}
+
+function botStop(){
+  fetch(BOT.agentUrl+'/stop', {method:'POST'})
+    .then(function(){ showToast('Bot detenido'); botPoll(); })
+    .catch(function(){});
+}
 
 var RC_PRIO_COLOR = {
   'Muy Alto': {bg:'#d1fae5', color:'#065f46', border:'#6ee7b7'},
