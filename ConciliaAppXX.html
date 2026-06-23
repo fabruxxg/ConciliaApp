@@ -548,6 +548,12 @@ thead th{
   position:sticky;top:0;background:var(--bg3);white-space:nowrap;z-index:10;
   letter-spacing:0.7px;
 }
+thead th.sortable{cursor:pointer;user-select:none;}
+thead th.sortable:hover{color:var(--primary);}
+thead th.sort-active{color:var(--primary);}
+.amt-filter{display:flex;gap:6px;align-items:center;}
+.amt-filter input{width:110px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--tx);outline:none;}
+.amt-filter input:focus{border-color:var(--primary);}
 tbody td{padding:14px 18px;border-bottom:1px solid var(--border);color:var(--tx2);transition:background .15s ease;}
 tbody tr:hover td{background:var(--bg3);}
 tbody tr:last-child td{border:none;}
@@ -1385,6 +1391,7 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
           <button class="pill" onclick="setF('pronet',this)">Pronet</button>
           <button class="pill" onclick="setF('compras',this)">Compras</button>
           <button class="pill" onclick="setF('diff',this)">⚠ Diferencias</button>
+          <button class="pill" onclick="setF('sincruz',this)">Sin Cruce</button>
           <button class="pill pf" onclick="setF('faltante',this)">Faltante Libro</button>
           <button class="pill ps" onclick="setF('solobook',this)">Solo Libro</button>
           <button class="pill pa" onclick="setF('aprobado',this)">Aprobado</button>
@@ -1393,13 +1400,29 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
           <button class="pill pc" onclick="setF('confirmado',this)">Confirmado</button>
         </div>
         <input class="srch" type="text" placeholder="Filtrar transacción..." id="srch" oninput="renderTbl()">
+        <div class="amt-filter">
+          <input type="number" id="amt-min" placeholder="Monto mín." oninput="renderTbl()" min="0">
+          <input type="number" id="amt-max" placeholder="Monto máx." oninput="renderTbl()" min="0">
+        </div>
         <button class="act-btn" onclick="exportCSV()">CSV</button>
         <button class="act-btn primary" onclick="exportXlsx()">Excel</button>
       </div>
       <div class="ibar" id="ibar">Ejecuta la conciliación para poblar la grilla de registros.</div>
       <div class="tscr">
         <table>
-          <thead><tr><th>Fuente</th><th>Fecha</th><th>Transacción</th><th>Cliente</th><th>RUC</th><th>Facturas del pago</th><th style="text-align:right">Monto Portal</th><th style="text-align:right">Monto Sistema</th><th style="text-align:right">Desviación</th><th>Estado</th><th>Con diferencia</th></tr></thead>
+          <thead><tr>
+            <th class="sortable" onclick="sortTbl('sistema')">Fuente <span id="si-sistema"></span></th>
+            <th class="sortable" onclick="sortTbl('fecha')">Fecha <span id="si-fecha"></span></th>
+            <th class="sortable" onclick="sortTbl('trx')">Transacción <span id="si-trx"></span></th>
+            <th class="sortable" onclick="sortTbl('cliente')">Cliente <span id="si-cliente"></span></th>
+            <th class="sortable" onclick="sortTbl('ruc')">RUC <span id="si-ruc"></span></th>
+            <th>Facturas del pago</th>
+            <th class="sortable" style="text-align:right" onclick="sortTbl('impPortal')">Monto Portal <span id="si-impPortal"></span></th>
+            <th class="sortable" style="text-align:right" onclick="sortTbl('impSys')">Monto Sistema <span id="si-impSys"></span></th>
+            <th class="sortable" style="text-align:right" onclick="sortTbl('diff')">Desviación <span id="si-diff"></span></th>
+            <th class="sortable" onclick="sortTbl('estado')">Estado <span id="si-estado"></span></th>
+            <th>Con diferencia</th>
+          </tr></thead>
           <tbody id="tbl-body"><tr><td colspan="11" class="empty-tbl">Procesa los archivos correspondientes para desplegar la información consolidada.</td></tr></tbody>
         </table>
       </div>
@@ -2055,6 +2078,14 @@ function checkRun(){
 }
 
 // Auxiliares de formato
+// Normalize any fecha format to YYYY-MM-DD for safe string comparison
+function fechaToISO(f){
+  if(!f) return '';
+  var s = String(f).trim();
+  var dm = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if(dm) return dm[3]+'-'+dm[2]+'-'+dm[1];
+  return s.split(' ')[0]; // already ISO or date-only portion
+}
 function num(v){
   if(v === '' || v == null) return 0;
   var s = String(v).trim();
@@ -2110,7 +2141,7 @@ function injectMockDataAndRun() {
     // 1. Mock Infonet (Día a Día)
     for (var i = 1; i <= 25; i++) {
       var d = new Date(); d.setDate(hoy.getDate() - (i % 5));
-      var fStr = d.toLocaleDateString('es-PY');
+      var fStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       var trxId = "5500" + (100 + i);
       var mPortal = 150000 + (i * 3500);
       // Simular diferencias
@@ -2132,7 +2163,7 @@ function injectMockDataAndRun() {
     // 2. Mock Netel
     for (var i = 1; i <= 15; i++) {
       var d = new Date(); d.setDate(hoy.getDate() - (i % 4));
-      var fStr = d.toLocaleDateString('es-PY');
+      var fStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       var idNetel = "001-080-" + String(50000 + i).padStart(7, '0');
       var mPortal = 220000 + (i * 12500);
       var mSys = mPortal;
@@ -2152,7 +2183,7 @@ function injectMockDataAndRun() {
     // 3. Mock Pronet
     for (var i = 1; i <= 20; i++) {
       var d = new Date(); d.setDate(hoy.getDate() - (i % 3));
-      var fStr = d.toLocaleDateString('es-PY');
+      var fStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       var trxId = "99440" + (300 + i);
       var mPortal = 95000 + (i * 6200);
       var mSys = mPortal;
@@ -2397,8 +2428,12 @@ function concilCompras(bufM, bufL){
   // ── 1. Parsear Marangatu (CSV o XLSX) ──
   var mapM = {};
   // Marangatu CSVs from Paraguay's SET use semicolons — detect before XLSX.read
-  var _sample = new TextDecoder('utf-8').decode(new Uint8Array(bufM, 0, Math.min(1024, bufM.byteLength)));
-  var _FS = _sample.split('\n')[0].includes(';') ? ';' : ',';
+  var _sample;
+  try { _sample = new TextDecoder('utf-8').decode(new Uint8Array(bufM, 0, Math.min(1024, bufM.byteLength))); }
+  catch(e) { try { _sample = new TextDecoder('iso-8859-1').decode(new Uint8Array(bufM, 0, Math.min(1024, bufM.byteLength))); showToast('⚠ Archivo Marangatu: encoding no estándar detectado (ISO-8859-1). Verificar resultado.'); } catch(e2){ _sample=''; } }
+  var _firstLine = (_sample||'').split('\n')[0];
+  var _FS = _firstLine.includes(';') ? ';' : ',';
+  if(_FS === ',') showToast('⚠ Marangatu: separador coma detectado (esperado punto y coma). Verificar que el archivo sea el CSV del SET.');
   var wbM = XLSX.read(bufM, {type:'array', raw:true, FS:_FS});
   var sh  = wbM.Sheets[wbM.SheetNames[0]];
   var dataM = XLSX.utils.sheet_to_json(sh, {header:1, defval:''});
@@ -2640,7 +2675,7 @@ function runConcil(){
       // Filter rows up to and including the corte date (cumulative: all transactions through cutoff)
       var corteVal = document.getElementById('fecha-corte').value; // YYYY-MM-DD
       if(corteVal){
-        ST.rows = ST.rows.filter(function(r){ return !r.fecha || r.fecha <= corteVal; });
+        ST.rows = ST.rows.filter(function(r){ return !r.fecha || fechaToISO(r.fecha) <= corteVal; });
       }
       // History key = the corte date (not the run date), so each cutoff accumulates independently
       var corteDate = today;
@@ -2937,19 +2972,45 @@ function buildCharts(rows, SIS, SN){
 
 // ══ RENDERIZADO DE LA TABLA COMPLETA CON NUEVOS FILTROS ══
 var AF = 'all';
+var SORT = {col: null, dir: 1};
+function sortTbl(col){
+  if(SORT.col === col){ SORT.dir *= -1; } else { SORT.col = col; SORT.dir = 1; }
+  document.querySelectorAll('thead span[id^="si-"]').forEach(function(s){ s.textContent=''; s.parentElement.classList.remove('sort-active'); });
+  var sp = document.getElementById('si-'+col);
+  if(sp){ sp.textContent = SORT.dir > 0 ? '↑' : '↓'; sp.parentElement.classList.add('sort-active'); }
+  ST.page = 1; renderTbl();
+}
 function setF(f, btn){ AF = f; document.querySelectorAll('#scr-tbl .pill').forEach(function(p){ p.classList.remove('on'); }); btn.classList.add('on'); ST.page = 1; renderTbl(); }
 function renderTbl(){
   var rows = [].concat(ST.rows); var q = (document.getElementById('srch')?.value || '').toLowerCase();
   
   // Logica de filtros ampliada
   if(AF === 'diff') rows = rows.filter(function(r){ return Math.abs(r.diff) > 0.5; });
+  else if(AF === 'sincruz') rows = rows.filter(function(r){ return r.sinCruz && r.sistema !== 'compras'; });
   else if(AF === 'faltante') rows = rows.filter(function(r){ return r.sistema==='compras' && r.sinCruz; });
   else if(AF === 'solobook') rows = rows.filter(function(r){ return r.sistema==='compras' && r.impPortal===null; });
   else if(['aprobado','reversado','anulado','confirmado'].includes(AF)) rows = rows.filter(function(r){ return (r.estado||'').toLowerCase() === AF; });
   else if(['infonet','netel','pronet','compras'].includes(AF)) rows = rows.filter(function(r){ return (r.sistema||'').toLowerCase() === AF; });
-  
+
   if(q) rows = rows.filter(function(r){ var facs=(r.facturas&&r.facturas.length?r.facturas.join(' '):r.factura||''); return (r.cliente+r.ruc+r.trx+facs+r.estado).toLowerCase().includes(q); });
-  
+
+  // Filtro por rango de monto
+  var amtMin = parseFloat((document.getElementById('amt-min')||{}).value) || 0;
+  var amtMax = parseFloat((document.getElementById('amt-max')||{}).value) || Infinity;
+  if(amtMin > 0 || amtMax < Infinity){
+    rows = rows.filter(function(r){ var m = Math.abs(r.impPortal != null ? r.impPortal : (r.impSys||0)); return m >= amtMin && m <= amtMax; });
+  }
+
+  // Ordenamiento por columna
+  if(SORT.col){
+    rows = rows.slice().sort(function(a,b){
+      var av = a[SORT.col], bv = b[SORT.col];
+      if(SORT.col === 'fecha'){ av = fechaToISO(av); bv = fechaToISO(bv); }
+      if(typeof av === 'number' && typeof bv === 'number') return (av - bv) * SORT.dir;
+      return String(av||'').localeCompare(String(bv||''), 'es') * SORT.dir;
+    });
+  }
+
   ST.filtered = rows; var tot = rows.length, pages = Math.max(1, Math.ceil(tot / ST.perPage)); if(ST.page > pages) ST.page = 1;
   var s = (ST.page - 1) * ST.perPage; var sl = rows.slice(s, s + ST.perPage);
   
@@ -2981,12 +3042,16 @@ function renderTbl(){
     var diffCell=isC?(r.sinCruz||r.impPortal===null?'<span class="dze">-</span>':dC(r.diff)):dC(r.diff);
     var hasDiff=isC?(!r.sinCruz&&r.impPortal!==null&&Math.abs(r.diff)>0.5):Math.abs(r.diff)>0.5;
 
-    // Columna "Facturas del pago": para compras muestra el timbrado; para los demás, todas las facturas del sistema
+    // Columna "Facturas del pago": compras=timbrado; sinCruz=ref portal; resto=todas las facturas del sistema
     var facList = isC
       ? '<span class="mono" style="font-size:11.5px">'+(r.factura||'-')+'</span>'
       : (function(){
           var facs = (r.facturas && r.facturas.length) ? r.facturas : (r.factura ? [r.factura] : []);
-          if(!facs.length) return '<span style="color:var(--tx3)">-</span>';
+          if(!facs.length){
+            // Sin cruce: no hay facturas del sistema — mostrar referencia del portal
+            var ref = r.trx || '-';
+            return '<span class="mono" style="font-size:11px;color:var(--tx3)">Trx. '+ref+'</span>';
+          }
           return facs.map(function(f){
             return '<span class="mono" style="display:block;font-size:11.5px;line-height:1.6">' + f + '</span>';
           }).join('');
@@ -3030,14 +3095,21 @@ function chPg(d){ ST.page += d; renderTbl(); }
 function exportRowsXlsx(rows, filename){
   if(!rows.length){ customAlert('Base vacía', 'No se registran datos para realizar la exportación'); return; }
   var h = ['Sistema','Fecha','Transaccion','Cliente','RUC','Todas las Facturas','Factura(s) con Diferencia','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
-  var data = [h].concat(rows.map(function(r){
-    var facs = (r.facturas && r.facturas.length) ? r.facturas.join(' / ') : (r.factura || '');
-    var fdif = (r.facturasDif && r.facturasDif.length) ? r.facturasDif.join(' / ') : '';
-    return [r.sistema, r.fecha, r.trx, r.cliente, r.ruc, facs, fdif, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'];
-  }));
-  var ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:30},{wch:30},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
-  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Conciliacion'); XLSX.writeFile(wb, filename);
+  var cols = [{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:30},{wch:30},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
+  function toRow(r){ var facs=(r.facturas&&r.facturas.length)?r.facturas.join(' / '):(r.factura||''); var fdif=(r.facturasDif&&r.facturasDif.length)?r.facturasDif.join(' / '):''; return [r.sistema,r.fecha,r.trx,r.cliente,r.ruc,facs,fdif,r.impPortal,r.impSys!=null?r.impSys:'',r.diff,r.estado,r.sinCruz?'SI':'NO']; }
+  var wb = XLSX.utils.book_new();
+  // Hoja resumen con todos los sistemas
+  var wsAll = XLSX.utils.aoa_to_sheet([h].concat(rows.map(toRow))); wsAll['!cols']=cols;
+  XLSX.utils.book_append_sheet(wb, wsAll, 'Todos');
+  // Una hoja por sistema presente
+  var sistemas = rows.reduce(function(acc,r){ if(r.sistema && acc.indexOf(r.sistema)<0) acc.push(r.sistema); return acc; },[]);
+  sistemas.forEach(function(s){
+    var sr = rows.filter(function(r){ return r.sistema===s; });
+    var ws = XLSX.utils.aoa_to_sheet([h].concat(sr.map(toRow))); ws['!cols']=cols;
+    var sname = s.charAt(0).toUpperCase()+s.slice(1);
+    XLSX.utils.book_append_sheet(wb, ws, sname);
+  });
+  XLSX.writeFile(wb, filename);
 }
 function exportHistExcel(){
   if(!ST.history.length){ customAlert('Historial vacío', 'Debe contar con al menos un análisis diario en el histórico.'); return; }
