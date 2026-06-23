@@ -1399,8 +1399,8 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       <div class="ibar" id="ibar">Ejecuta la conciliación para poblar la grilla de registros.</div>
       <div class="tscr">
         <table>
-          <thead><tr><th>Fuente</th><th>Fecha</th><th>Transacción</th><th>Cliente</th><th>Referencia</th><th style="text-align:right">Monto Portal</th><th style="text-align:right">Monto Sistema</th><th style="text-align:right">Desviación</th><th>Estado</th><th>Observación</th></tr></thead>
-          <tbody id="tbl-body"><tr><td colspan="10" class="empty-tbl">Procesa los archivos correspondientes para desplegar la información consolidada.</td></tr></tbody>
+          <thead><tr><th>Fuente</th><th>Fecha</th><th>Transacción</th><th>Cliente</th><th>RUC</th><th>Facturas del pago</th><th style="text-align:right">Monto Portal</th><th style="text-align:right">Monto Sistema</th><th style="text-align:right">Desviación</th><th>Estado</th><th>Con diferencia</th></tr></thead>
+          <tbody id="tbl-body"><tr><td colspan="11" class="empty-tbl">Procesa los archivos correspondientes para desplegar la información consolidada.</td></tr></tbody>
         </table>
       </div>
       <div class="pgr">
@@ -1898,8 +1898,8 @@ var API_BASE = 'https://conciliaapp-production.up.railway.app';
 function apiToken(){ return localStorage.getItem('token') || ''; }
 
 // Compact row storage: arrays use ~57% less space than named-field objects
-function _r2a(r){return[r.sistema||'',r.fecha||'',r.trx||'',r.nroRaw||'',r.cliente||'',r.ruc||'',r.factura||'',r.impPortal,r.impSys,r.diff,r.sinCruz?1:0,r.estado||'',r.causa||''];}
-function _a2r(a){return{sistema:a[0],fecha:a[1],trx:a[2],nroRaw:a[3],cliente:a[4],ruc:a[5],factura:a[6],impPortal:a[7],impSys:a[8],diff:a[9],sinCruz:!!a[10],estado:a[11],causa:a[12]};}
+function _r2a(r){return[r.sistema||'',r.fecha||'',r.trx||'',r.nroRaw||'',r.cliente||'',r.ruc||'',r.factura||'',r.impPortal,r.impSys,r.diff,r.sinCruz?1:0,r.estado||'',r.causa||'',(r.facturas&&r.facturas.length?r.facturas.join('|'):''),(r.facturasDif&&r.facturasDif.length?r.facturasDif.join('|'):''),(r.facturaDetalle&&r.facturaDetalle.length?JSON.stringify(r.facturaDetalle):'')];}
+function _a2r(a){return{sistema:a[0],fecha:a[1],trx:a[2],nroRaw:a[3],cliente:a[4],ruc:a[5],factura:a[6],impPortal:a[7],impSys:a[8],diff:a[9],sinCruz:!!a[10],estado:a[11],causa:a[12],facturas:(a[13]?a[13].split('|'):[]),facturasDif:(a[14]?a[14].split('|'):[]),facturaDetalle:(a[15]?JSON.parse(a[15]):[])};}
 function loadHist(){
   try{
     var raw=JSON.parse(localStorage.getItem('concilia_hist')||'[]');
@@ -2192,28 +2192,37 @@ function concilInfornet(pBuf, sBuf){
     hdrs.forEach(function(h, i){ o[h] = (v[i] || '').trim(); });
     return o;
   }).filter(function(r){ return r['Nro. transaccion']; });
-  
+
   var sys = readSheet(sBuf).filter(function(r){
     var c = String(r['Cód. Comprobante'] || '').trim().replace(/\.0$/, '');
     return c === '30' || String(r['Comprobante'] || '').toUpperCase().includes('INFONET');
   });
-  
+
+  // Collect ALL system rows per transaction (one trx can have multiple facturas)
   var sMap = {};
   sys.forEach(function(r){
     var t = String(r['Transacción'] || '').trim().replace(/\.0$/, '');
-    if(t) sMap[t] = r;
+    if(!t) return;
+    if(!sMap[t]) sMap[t] = [];
+    sMap[t].push(r);
   });
-  
+
   return portal.map(function(r){
     var trx = String(r['Nro. transaccion'] || '').trim().replace(/\.0$/, '');
     var imp = num(r['Importe']);
-    var s = sMap[trx];
-    var iS = s ? num(s['Importe Total']) : null;
+    var sArr = sMap[trx] || [];
+    var iS = sArr.length ? sArr.reduce(function(a,x){ return a + num(x['Importe Total']); }, 0) : null;
+    var diff = iS !== null ? imp - iS : 0;
+    var detalle = sArr.map(function(x){ return {nro: String(x['Numero Factura']||'').trim(), importe: num(x['Importe Total'])}; });
+    var facturas = detalle.map(function(x){ return x.nro; }).filter(Boolean);
+    var facturasDif = (iS !== null && Math.abs(diff) > 0.5) ? facturas : [];
     return {
       sistema: 'infonet', fecha: r['Fecha de venta'] || '', trx: trx,
-      cliente: s ? String(s['Cliente'] || '').trim() : String(r['Empresa'] || '').trim(),
-      ruc: s ? String(s['RUC'] || '').trim() : '', factura: s ? String(s['Numero Factura'] || '').trim() : '',
-      impPortal: imp, impSys: iS, diff: iS !== null ? imp - iS : 0, sinCruz: iS === null, estado: r['Estado'] || '', causa: iS !== null && Math.abs(imp - iS) > 0.5 ? 'Desvío de importe detectado' : ''
+      cliente: sArr.length ? String(sArr[0]['Cliente']||'').trim() : String(r['Empresa']||'').trim(),
+      ruc: sArr.length ? String(sArr[0]['RUC']||'').trim() : '',
+      factura: facturas.join(' / '), facturas: facturas, facturasDif: facturasDif, facturaDetalle: detalle,
+      impPortal: imp, impSys: iS, diff: diff, sinCruz: iS === null,
+      estado: r['Estado'] || '', causa: iS !== null && Math.abs(diff) > 0.5 ? 'Desvío de importe detectado' : ''
     };
   });
 }
@@ -2223,7 +2232,7 @@ function concilNetel(pBuf, sBuf){
   var colId = Object.keys(raw[0]).find(function(k){ return k.toLowerCase().includes('dato'); }) || 'Dato id';
   var colT = Object.keys(raw[0]).find(function(k){ return k.toLowerCase() === 'total'; }) || 'Total';
   var colF = Object.keys(raw[0]).find(function(k){ return k.toLowerCase().startsWith('fec'); }) || 'Fecha';
-  
+
   var aggP = {};
   raw.forEach(function(r){
     var rawId = String(r[colId] || '').trim(); if(!rawId || rawId === colId) return;
@@ -2231,30 +2240,46 @@ function concilNetel(pBuf, sBuf){
     if(!aggP[id]) aggP[id] = {total: 0, fecha: String(r[colF] || '').trim()};
     aggP[id].total += num(r[colT]);
   });
-  
+
   var sys = readSheet(sBuf).filter(function(r){
     var c = String(r['Cód. Comprobante'] || '').trim().replace(/\.0$/, '');
     return c === '40' || String(r['Comprobante'] || '').toUpperCase().includes('EXPRESS');
   });
-  
+
+  // Collect ALL facturas per RUC and per factura number (one client can have multiple facturas)
   var aR = {}, aF = {};
   sys.forEach(function(r){
     var ruc = String(r['RUC'] || '').trim();
     var fac = String(r['Numero Factura'] || '').trim();
     var tot = num(r['Importe Total']);
     var cli = String(r['Cliente'] || '').trim();
-    if(ruc){ if(!aR[ruc]) aR[ruc] = {total: 0, cliente: cli, factura: fac}; aR[ruc].total += tot; }
-    if(fac){ if(!aF[fac]) aF[fac] = {total: 0, cliente: cli, ruc: ruc}; aF[fac].total += tot; }
+    if(ruc){
+      if(!aR[ruc]) aR[ruc] = {total: 0, facturas: [], cliente: cli, ruc: ruc};
+      aR[ruc].total += tot;
+      if(fac) aR[ruc].facturas.push({nro: fac, importe: tot});
+    }
+    if(fac){
+      if(!aF[fac]) aF[fac] = {total: 0, facturas: [], cliente: cli, ruc: ruc};
+      aF[fac].total += tot;
+      aF[fac].facturas.push({nro: fac, importe: tot});
+    }
   });
-  
+
   return Object.entries(aggP).map(function(entry){
     var id = entry[0], pd = entry[1];
     var s = aR[id] || aF[id] || null;
     var iS = s ? s.total : null;
+    var diff = iS !== null ? pd.total - iS : 0;
+    var detalle = s ? s.facturas : [];
+    var facturas = detalle.map(function(x){ return x.nro; }).filter(Boolean);
+    var facturasDif = (iS !== null && Math.abs(diff) > 0.5) ? facturas : [];
     return {
-      sistema: 'netel', fecha: pd.fecha, trx: id, cliente: s ? s.cliente : '',
-      ruc: s ? (s.ruc || id) : id, factura: s ? (s.factura || '') : '',
-      impPortal: pd.total, impSys: iS, diff: iS !== null ? pd.total - iS : 0, sinCruz: iS === null, estado: 'CO', causa: iS !== null && Math.abs(pd.total - iS) > 0.5 ? 'Desvío de importe detectado' : ''
+      sistema: 'netel', fecha: pd.fecha, trx: id,
+      cliente: s ? s.cliente : '',
+      ruc: s ? (s.ruc || id) : id,
+      factura: facturas.join(' / '), facturas: facturas, facturasDif: facturasDif, facturaDetalle: detalle,
+      impPortal: pd.total, impSys: iS, diff: diff, sinCruz: iS === null,
+      estado: 'CO', causa: iS !== null && Math.abs(diff) > 0.5 ? 'Desvío de importe detectado' : ''
     };
   });
 }
@@ -2276,34 +2301,46 @@ function concilPronet(pBuf, sBuf){
       });
     }
   } catch(e) { console.error('Error portal Pronet:', e); }
-  
+
   var sysAll = readSheet(sBuf);
   var sys = sysAll.filter(function(r){
     if(String(r['Fecha'] || '').trim().toUpperCase() === 'TOTAL') return false;
     var cod = parseInt(String(r['Cód. Comprobante'] || r['Cod. Comprobante'] || '').trim());
     return cod === 20 || String(r['Comprobante'] || '').toUpperCase().includes('PRONET');
   });
-  
+
+  // Collect ALL system rows per transaction (one trx can have multiple facturas)
   var sMap = {};
   sys.forEach(function(r){
     var rawT = String(r['Transacción'] || '').trim();
     var t = rawT.indexOf('.') > -1 ? String(parseInt(rawT)) : rawT;
-    if(t && t !== 'NaN' && t !== '') sMap[t] = r;
+    if(!t || t === 'NaN' || t === '') return;
+    if(!sMap[t]) sMap[t] = [];
+    sMap[t].push(r);
   });
-  
+
   return portal.map(function(r){
     var rawTrx = String(r['Codigo Trx.'] || '').trim();
     var trx = rawTrx.indexOf('.') > -1 ? String(parseInt(rawTrx)) : rawTrx;
     if(!trx || trx === 'NaN' || trx === '') return null;
     var imp = num(r['Importe']);
     var est = String(r['Confirmado/Anulado'] || '').trim();
-    var s = sMap[trx];
-    var iS = s ? num(s['Importe Total']) : null;
+    var sArr = sMap[trx] || [];
+    var iS = sArr.length ? sArr.reduce(function(a,x){ return a + num(x['Importe Total']); }, 0) : null;
+    var diff = iS !== null ? imp - iS : 0;
+    var detalle = sArr.map(function(x){ return {nro: String(x['Numero Factura']||'').trim(), importe: num(x['Importe Total'])}; });
+    var facturas = detalle.map(function(x){ return x.nro; }).filter(Boolean);
+    var facturasDif = (iS !== null && Math.abs(diff) > 0.5) ? facturas : [];
+    var fallbackFac = String(r['Referencia Pago'] || '').trim().replace(/^'/, '');
     return {
       sistema: 'pronet', fecha: String(r['Fecha Cobro'] || '').trim(), trx: trx,
-      cliente: s ? String(s['Cliente'] || '').trim() : '', ruc: s ? String(s['RUC'] || '').trim() : '',
-      factura: s ? String(s['Numero Factura'] || '').trim() : String(r['Referencia Pago'] || '').trim().replace(/^'/, ''),
-      impPortal: imp, impSys: iS, diff: iS !== null ? imp - iS : 0, sinCruz: iS === null, estado: est, causa: iS !== null && Math.abs(imp - iS) > 0.5 ? 'Desvío de importe detectado' : ''
+      cliente: sArr.length ? String(sArr[0]['Cliente']||'').trim() : '',
+      ruc: sArr.length ? String(sArr[0]['RUC']||'').trim() : '',
+      factura: facturas.length ? facturas.join(' / ') : fallbackFac,
+      facturas: facturas.length ? facturas : (fallbackFac ? [fallbackFac] : []),
+      facturasDif: facturasDif, facturaDetalle: detalle,
+      impPortal: imp, impSys: iS, diff: diff, sinCruz: iS === null,
+      estado: est, causa: iS !== null && Math.abs(diff) > 0.5 ? 'Desvío de importe detectado' : ''
     };
   }).filter(Boolean);
 }
@@ -2896,7 +2933,7 @@ function renderTbl(){
   else if(['aprobado','reversado','anulado','confirmado'].includes(AF)) rows = rows.filter(function(r){ return (r.estado||'').toLowerCase() === AF; });
   else if(['infonet','netel','pronet','compras'].includes(AF)) rows = rows.filter(function(r){ return (r.sistema||'').toLowerCase() === AF; });
   
-  if(q) rows = rows.filter(function(r){ return (r.cliente+r.ruc+r.trx+r.factura+r.estado).toLowerCase().includes(q); });
+  if(q) rows = rows.filter(function(r){ var facs=(r.facturas&&r.facturas.length?r.facturas.join(' '):r.factura||''); return (r.cliente+r.ruc+r.trx+facs+r.estado).toLowerCase().includes(q); });
   
   ST.filtered = rows; var tot = rows.length, pages = Math.max(1, Math.ceil(tot / ST.perPage)); if(ST.page > pages) ST.page = 1;
   var s = (ST.page - 1) * ST.perPage; var sl = rows.slice(s, s + ST.perPage);
@@ -2920,26 +2957,49 @@ function renderTbl(){
   function dC(d){ if(Math.abs(d)<=0.5) return '<span class="dze">-</span>'; return '<span class="'+(d>0?'dpos':'dneg')+'">'+(d>0?'+':'-')+'Gs. '+fmt(d)+'</span>'; }
   
   var tb = document.getElementById('tbl-body');
-  if(!sl.length){ tb.innerHTML = '<tr><td colspan="10" class="empty-tbl">Ningún registro coincide con los filtros establecidos.</td></tr>'; return; }
-  
+  if(!sl.length){ tb.innerHTML = '<tr><td colspan="11" class="empty-tbl">Ningún registro coincide con los filtros establecidos.</td></tr>'; return; }
+
   tb.innerHTML = sl.map(function(r){
     var isC=r.sistema==='compras';
     var portalCell=r.impPortal!==null?fmt(r.impPortal):'<span style="color:var(--tx3)">-</span>';
     var sysCell=r.impSys!==null?fmt(r.impSys):'<span style="color:var(--tx3)">-</span>';
-    // Compras: diff only meaningful when invoice exists in both files
     var diffCell=isC?(r.sinCruz||r.impPortal===null?'<span class="dze">-</span>':dC(r.diff)):dC(r.diff);
     var hasDiff=isC?(!r.sinCruz&&r.impPortal!==null&&Math.abs(r.diff)>0.5):Math.abs(r.diff)>0.5;
+
+    // Columna "Facturas del pago": para compras muestra el timbrado; para los demás, todas las facturas del sistema
+    var facList = isC
+      ? '<span class="mono" style="font-size:11.5px">'+(r.factura||'-')+'</span>'
+      : (function(){
+          var facs = (r.facturas && r.facturas.length) ? r.facturas : (r.factura ? [r.factura] : []);
+          if(!facs.length) return '<span style="color:var(--tx3)">-</span>';
+          return facs.map(function(f){
+            return '<span class="mono" style="display:block;font-size:11.5px;line-height:1.6">' + f + '</span>';
+          }).join('');
+        })();
+
+    // Columna "Con diferencia": facturas involucradas en el desvío (solo para infonet/netel/pronet)
+    var difList = isC
+      ? '<span class="dze">-</span>'
+      : (function(){
+          var difs = (r.facturasDif && r.facturasDif.length) ? r.facturasDif : [];
+          if(!difs.length) return '<span class="dze">-</span>';
+          return difs.map(function(f){
+            return '<span class="mono" style="display:block;font-size:11.5px;line-height:1.6;color:var(--amber)">' + f + '</span>';
+          }).join('');
+        })();
+
     return '<tr class="'+(hasDiff?'has-diff':'')+'">'+
       '<td>'+(stag[r.sistema]||'')+'</td>'+
       '<td class="mono">'+r.fecha+'</td>'+
       '<td class="mono">'+r.trx+'</td>'+
-      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)">'+r.cliente+'</td>'+
-      '<td class="mono">'+(r.ruc||r.factura)+'</td>'+
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)">'+r.cliente+'</td>'+
+      '<td class="mono" style="font-size:11.5px">'+(r.ruc||'-')+'</td>'+
+      '<td>'+facList+'</td>'+
       '<td class="mono" style="text-align:right;">'+portalCell+'</td>'+
       '<td class="mono" style="text-align:right;">'+sysCell+'</td>'+
       '<td style="text-align:right">'+diffCell+'</td>'+
       '<td>'+(isC?eCB(r):eB(r.estado))+'</td>'+
-      '<td><span style="color:var(--tx3);font-size:11.5px">'+(r.causa||'-')+'</span></td>'+
+      '<td>'+difList+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -2948,12 +3008,14 @@ function chPg(d){ ST.page += d; renderTbl(); }
 // ══ EXPORTACIÓN DE PLANILLAS Excel / CSV ══
 function exportRowsXlsx(rows, filename){
   if(!rows.length){ customAlert('Base vacía', 'No se registran datos para realizar la exportación'); return; }
-  var h = ['Sistema','Fecha','Transaccion','Cliente','RUC','Factura','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
+  var h = ['Sistema','Fecha','Transaccion','Cliente','RUC','Todas las Facturas','Factura(s) con Diferencia','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
   var data = [h].concat(rows.map(function(r){
-    return [r.sistema, r.fecha, r.trx, r.cliente, r.ruc, r.factura, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'];
+    var facs = (r.facturas && r.facturas.length) ? r.facturas.join(' / ') : (r.factura || '');
+    var fdif = (r.facturasDif && r.facturasDif.length) ? r.facturasDif.join(' / ') : '';
+    return [r.sistema, r.fecha, r.trx, r.cliente, r.ruc, facs, fdif, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'];
   }));
   var ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:18},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
+  ws['!cols'] = [{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:30},{wch:30},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Conciliacion'); XLSX.writeFile(wb, filename);
 }
 function exportHistExcel(){
@@ -2961,20 +3023,24 @@ function exportHistExcel(){
   var hist = [].concat(ST.history).sort(function(a,b){ return a.date.localeCompare(b.date); });
   var all = [];
   hist.forEach(function(h){ h.rows.forEach(function(r){ all.push(Object.assign({}, r, {_fecha_concil: h.date})); }); });
-  var h = ['Fecha Concil.','Sistema','Fecha Trx.','Transaccion','Cliente','RUC','Factura','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
+  var h = ['Fecha Concil.','Sistema','Fecha Trx.','Transaccion','Cliente','RUC','Todas las Facturas','Factura(s) con Diferencia','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
   var data = [h].concat(all.map(function(r){
-    return [r._fecha_concil, r.sistema, r.fecha, r.trx, r.cliente, r.ruc, r.factura, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'];
+    var facs = (r.facturas && r.facturas.length) ? r.facturas.join(' / ') : (r.factura || '');
+    var fdif = (r.facturasDif && r.facturasDif.length) ? r.facturasDif.join(' / ') : '';
+    return [r._fecha_concil, r.sistema, r.fecha, r.trx, r.cliente, r.ruc, facs, fdif, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'];
   }));
   var ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:14},{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:18},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
+  ws['!cols'] = [{wch:14},{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:30},{wch:30},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Acumulada'); XLSX.writeFile(wb, 'Reporte_Acumulado.xlsx');
   showToast('✓ Resumen acumulado generado con éxito');
 }
 function exportCSV(){
   if(!ST.filtered.length){ customAlert('Registros vacíos', 'No hay registros disponibles en esta vista.'); return; }
-  var h = ['Sistema','Fecha','Transaccion','Cliente','RUC','Factura','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
+  var h = ['Sistema','Fecha','Transaccion','Cliente','RUC','Todas las Facturas','Factura(s) con Diferencia','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
   var lines = ST.filtered.map(function(r){
-    return [r.sistema, r.fecha, r.trx, r.cliente, r.ruc, r.factura, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'].map(function(v){
+    var facs = (r.facturas && r.facturas.length) ? r.facturas.join(' / ') : (r.factura || '');
+    var fdif = (r.facturasDif && r.facturasDif.length) ? r.facturasDif.join(' / ') : '';
+    return [r.sistema, r.fecha, r.trx, r.cliente, r.ruc, facs, fdif, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'].map(function(v){
       return '"' + String(v).replace(/"/g,'""') + '"';
     }).join(',');
   });
