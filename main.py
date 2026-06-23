@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from database import init_db, engine, get_session
-from models import User, ReconciliationHistory
+from models import User, ReconciliationHistory, Candidate
 from sqlmodel import Session, select
 import os
 
@@ -333,3 +333,93 @@ async def eliminar_historial(entry_id: int, current_user: User = Depends(get_cur
         session.delete(entrada)
         session.commit()
         return {"status": "deleted"}
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 5. RECLUTAMIENTO
+# ═════════════════════════════════════════════════════════════════════
+BOT_SECRET = os.getenv("BOT_SECRET", "shift2026recruit")
+
+def _check_bot(request: Request):
+    secret = request.headers.get("X-Bot-Secret", "")
+    if secret != BOT_SECRET:
+        raise HTTPException(status_code=403, detail="Bot secret inválido")
+
+@app.post("/v1/recruitment/candidates")
+async def upsert_candidates(request: Request):
+    _check_bot(request)
+    body = await request.json()
+    candidates = body if isinstance(body, list) else [body]
+    saved = 0
+    with Session(engine) as session:
+        for c in candidates:
+            existing = session.exec(
+                select(Candidate).where(
+                    Candidate.phone == str(c.get("phone","")).strip(),
+                    Candidate.linea == c.get("linea", 1)
+                )
+            ).first()
+            if existing:
+                for k in ["name","cv_text","score_cc","score_ventas","score_rrss","score_presion","score_perfil","total","canal","prioridad","observaciones","sesion"]:
+                    v = c.get(k)
+                    if v is not None:
+                        setattr(existing, k, v)
+                session.add(existing)
+            else:
+                entry = Candidate(
+                    phone=str(c.get("phone","")).strip(),
+                    name=c.get("name",""),
+                    cv_text=c.get("cv_text"),
+                    score_cc=c.get("score_cc"),
+                    score_ventas=c.get("score_ventas"),
+                    score_rrss=c.get("score_rrss"),
+                    score_presion=c.get("score_presion"),
+                    score_perfil=c.get("score_perfil"),
+                    total=c.get("total"),
+                    canal=c.get("canal"),
+                    prioridad=c.get("prioridad"),
+                    observaciones=c.get("observaciones"),
+                    linea=c.get("linea", 1),
+                    sesion=c.get("sesion"),
+                )
+                session.add(entry)
+                saved += 1
+        session.commit()
+    return {"status": "ok", "saved": saved, "total": len(candidates)}
+
+@app.get("/v1/recruitment/candidates")
+async def get_candidates(current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        rows = session.exec(select(Candidate).order_by(Candidate.total.desc())).all()
+        return [
+            {
+                "id": r.id, "phone": r.phone, "name": r.name,
+                "score_cc": r.score_cc, "score_ventas": r.score_ventas,
+                "score_rrss": r.score_rrss, "score_presion": r.score_presion,
+                "score_perfil": r.score_perfil, "total": r.total,
+                "canal": r.canal, "prioridad": r.prioridad,
+                "observaciones": r.observaciones, "cv_text": r.cv_text,
+                "linea": r.linea, "sesion": r.sesion,
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            }
+            for r in rows
+        ]
+
+@app.delete("/v1/recruitment/candidates/{candidate_id}")
+async def delete_candidate(candidate_id: int, current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        c = session.get(Candidate, candidate_id)
+        if not c:
+            raise HTTPException(status_code=404, detail="No encontrado")
+        session.delete(c)
+        session.commit()
+        return {"status": "deleted"}
+
+@app.delete("/v1/recruitment/candidates")
+async def delete_all_candidates(current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        rows = session.exec(select(Candidate)).all()
+        for r in rows:
+            session.delete(r)
+        session.commit()
+        return {"status": "ok", "deleted": len(rows)}
