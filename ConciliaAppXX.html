@@ -3193,7 +3193,7 @@ function exportStyledXls(rows, title, filename, extraHeader){
     '<p style="margin:0 0 16px"></p>'+
     summaryHtml+
     '<table style="border-collapse:collapse;width:100%"><thead>'+headerRow+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
-    '<p style="margin-top:20px;font-size:8pt;color:#cbb8ae">Generado por ConciliaApp · Motor de Inteligencia Financiera</p>'+
+    '<p style="margin-top:20px;font-size:8pt;color:#cbb8ae">Produced by Shift Consulting</p>'+
   '</body></html>';
 
   var blob = new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
@@ -3288,7 +3288,7 @@ function exportHistExcel(){
     '<p style="font-size:9pt;color:#846f63;margin:0 0 16px">'+dateStr+'</p>'+
     summaryHtml+
     '<table style="border-collapse:collapse;width:100%"><thead>'+thead+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
-    '<p style="margin-top:20px;font-size:8pt;color:#cbb8ae">Generado por ConciliaApp · Motor de Inteligencia Financiera</p>'+
+    '<p style="margin-top:20px;font-size:8pt;color:#cbb8ae">Produced by Shift Consulting</p>'+
   '</body></html>';
 
   var blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
