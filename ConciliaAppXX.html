@@ -4437,7 +4437,7 @@ function rcApiBase(){ return window.location.origin; }
 function loadRecruit(){
   var tbody = document.getElementById('rc-tbody');
   tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--tx3);padding:40px">Cargando…</td></tr>';
-  var token = localStorage.getItem('concilia_token');
+  var token = localStorage.getItem('token');
   if(!token){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--tx3);padding:40px">Sesión no iniciada.</td></tr>'; return; }
   fetch(rcApiBase()+'/v1/recruitment/candidates', {headers:{'Authorization':'Bearer '+token}})
     .then(function(r){ return r.json(); })
@@ -4554,7 +4554,7 @@ function closeRcModal(){
 
 function deleteCandidate(id){
   customConfirm('Eliminar candidato','¿Eliminar este candidato de la base?').then(function(){
-    var token=localStorage.getItem('concilia_token');
+    var token=localStorage.getItem('token');
     fetch(rcApiBase()+'/v1/recruitment/candidates/'+id,{method:'DELETE',headers:{'Authorization':'Bearer '+token}})
       .then(function(){ RC.candidates=RC.candidates.filter(function(c){return c.id!==id;}); renderRecruit(); showToast('Candidato eliminado'); })
       .catch(function(){ showToast('Error al eliminar'); });
@@ -4563,7 +4563,7 @@ function deleteCandidate(id){
 
 function clearRecruitConfirm(){
   customConfirm('Limpiar base completa','Eliminar TODOS los candidatos de la base. Esta acción no se puede deshacer.').then(function(){
-    var token=localStorage.getItem('concilia_token');
+    var token=localStorage.getItem('token');
     fetch(rcApiBase()+'/v1/recruitment/candidates',{method:'DELETE',headers:{'Authorization':'Bearer '+token}})
       .then(function(){ RC.candidates=[]; renderRecruit(); showToast('Base de candidatos vaciada'); })
       .catch(function(){ showToast('Error al limpiar'); });
