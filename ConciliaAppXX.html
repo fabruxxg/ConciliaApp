@@ -1911,6 +1911,17 @@ function loadHist(){
     });
   }catch(e){ST.history=[];}
 }
+// Tombstone list: timestamps of manually-deleted entries — prevents cloud sync from re-adding them
+function tombstoneAdd(ts){
+  try{
+    var d=JSON.parse(localStorage.getItem('concilia_deleted')||'[]');
+    d.push(String(ts));
+    if(d.length>200) d=d.slice(-200);
+    localStorage.setItem('concilia_deleted',JSON.stringify(d));
+  }catch(e){}
+}
+function tombstoneSet(){ try{ return new Set(JSON.parse(localStorage.getItem('concilia_deleted')||'[]')); }catch(e){ return new Set(); } }
+
 function saveHist(){
   var compact=ST.history.map(function(h){return{date:h.date,ts:h.ts,cloud_id:h.cloud_id,rows:h.rows.map(_r2a)};});
   for(var _t=0;_t<30;_t++){
@@ -1938,9 +1949,10 @@ async function cargarHistorialNube() {
     var data = await res.json();
     if (!Array.isArray(data) || !data.length) return;
 
-    // Merge: evita duplicados por timestamp
+    // Merge: evita duplicados por timestamp y respeta eliminaciones manuales (tombstones)
     var localTs = new Set(ST.history.map(function(h){ return String(h.ts); }));
-    var nuevas = data.filter(function(d){ return d.rows && d.rows.length && !localTs.has(String(d.ts)); });
+    var deleted = tombstoneSet();
+    var nuevas = data.filter(function(d){ return d.rows && d.rows.length && !localTs.has(String(d.ts)) && !deleted.has(String(d.ts)); });
 
     if (nuevas.length) {
       ST.history = ST.history.concat(nuevas);
@@ -2751,7 +2763,9 @@ function exportDay(i){
 function delDay(i){
   customConfirm('Confirmar purga', '¿Desea eliminar de forma permanente este registro de auditoría diaria?').then(function(confirmed) {
     if (confirmed) {
-      var cloudId = ST.history[i] && ST.history[i].cloud_id;
+      var entry = ST.history[i];
+      var cloudId = entry && entry.cloud_id;
+      if(entry && entry.ts) tombstoneAdd(entry.ts);
       ST.history.splice(i,1);
       saveHist();
       renderHist();
@@ -2764,6 +2778,7 @@ function delDay(i){
 function clearHist(){
   customConfirm('Vaciar Historial', 'Atención: Esta acción eliminará permanentemente todos los registros consolidados del historial. ¿Desea continuar?').then(function(confirmed) {
     if (confirmed) {
+      ST.history.forEach(function(h){ if(h.ts) tombstoneAdd(h.ts); });
       ST.history = []; saveHist(); renderHist(); showToast('Historial completo vaciado');
     }
   });
