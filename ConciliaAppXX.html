@@ -3092,40 +3092,209 @@ function renderTbl(){
 function chPg(d){ ST.page += d; renderTbl(); }
 
 // ══ EXPORTACIÓN DE PLANILLAS Excel / CSV ══
-function exportRowsXlsx(rows, filename){
-  if(!rows.length){ customAlert('Base vacía', 'No se registran datos para realizar la exportación'); return; }
-  var h = ['Sistema','Fecha','Transaccion','Cliente','RUC','Todas las Facturas','Factura(s) con Diferencia','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
-  var cols = [{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:30},{wch:30},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
-  function toRow(r){ var facs=(r.facturas&&r.facturas.length)?r.facturas.join(' / '):(r.factura||''); var fdif=(r.facturasDif&&r.facturasDif.length)?r.facturasDif.join(' / '):''; return [r.sistema,r.fecha,r.trx,r.cliente,r.ruc,facs,fdif,r.impPortal,r.impSys!=null?r.impSys:'',r.diff,r.estado,r.sinCruz?'SI':'NO']; }
-  var wb = XLSX.utils.book_new();
-  // Hoja resumen con todos los sistemas
-  var wsAll = XLSX.utils.aoa_to_sheet([h].concat(rows.map(toRow))); wsAll['!cols']=cols;
-  XLSX.utils.book_append_sheet(wb, wsAll, 'Todos');
-  // Una hoja por sistema presente
-  var sistemas = rows.reduce(function(acc,r){ if(r.sistema && acc.indexOf(r.sistema)<0) acc.push(r.sistema); return acc; },[]);
-  sistemas.forEach(function(s){
-    var sr = rows.filter(function(r){ return r.sistema===s; });
-    var ws = XLSX.utils.aoa_to_sheet([h].concat(sr.map(toRow))); ws['!cols']=cols;
-    var sname = s.charAt(0).toUpperCase()+s.slice(1);
-    XLSX.utils.book_append_sheet(wb, ws, sname);
-  });
-  XLSX.writeFile(wb, filename);
+
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Styled HTML-based XLS export (SheetJS free doesn't support cell colors/fonts)
+function exportStyledXls(rows, title, filename, extraHeader){
+  if(!rows.length){ customAlert('Sin datos','No hay registros para exportar.'); return; }
+
+  var dateStr = new Date().toLocaleDateString('es-PY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  var corte = (document.getElementById('fecha-corte')||{}).value || '—';
+
+  var total = rows.length;
+  var ok    = rows.filter(function(r){ return !r.sinCruz && r.impPortal!==null && Math.abs(r.diff||0)<=0.5 && r.sistema!=='compras'; }).length
+            + rows.filter(function(r){ return r.sistema==='compras' && !r.sinCruz && r.impPortal!==null && Math.abs(r.diff||0)<=0.5; }).length;
+  var difs  = rows.filter(function(r){ return Math.abs(r.diff||0)>0.5; }).length;
+  var sc    = rows.filter(function(r){ return r.sinCruz; }).length;
+  var totalPortal = rows.reduce(function(a,r){ return a+(r.impPortal||0); },0);
+  var totalExp    = rows.reduce(function(a,r){ return a+(Math.abs(r.diff||0)>0.5?Math.abs(r.diff||0):0); },0);
+
+  var sysC = {infonet:'#dbeafe;color:#1d4ed8',netel:'#e0f2fe;color:#0369a1',pronet:'#ede9fe;color:#6d28d9',compras:'#fff7ed;color:#ea580c'};
+
+  function rowCls(r,i){
+    if(r.sinCruz) return '#fffbeb';
+    if(r.impPortal===null) return '#f0f9ff';
+    if(Math.abs(r.diff||0)>0.5) return '#fff1f2';
+    var e=(r.estado||'').toLowerCase();
+    if(e==='anulado'||e==='reversado') return '#f8fafc';
+    return i%2===0?'#ffffff':'#faf6f2';
+  }
+
+  var rowsHtml = rows.map(function(r,i){
+    var bg = rowCls(r,i);
+    var facs = (r.facturas&&r.facturas.length)?r.facturas.join(', '):(r.factura||'—');
+    var fdif = (r.facturasDif&&r.facturasDif.length)?r.facturasDif.join(', '):'';
+    var diffAmt = Math.abs(r.diff||0);
+    var diffCell = diffAmt<=0.5
+      ? '<span style="color:#15803d;font-weight:600">✓</span>'
+      : '<span style="color:#dc2626;font-weight:700">'+(r.diff>0?'+':''+'−')+'Gs. '+fmt(diffAmt)+'</span>';
+    var portalStr = r.impPortal!=null?'Gs. '+fmt(r.impPortal):'—';
+    var sysStr    = r.impSys!=null?'Gs. '+fmt(r.impSys):'—';
+    var sysStyle  = sysC[r.sistema]||'#f1f5f9;color:#475569';
+    var sysTag    = '<span style="background:'+sysStyle.split(';')[0].replace('background:','')+';'+sysStyle.split(';')[1]+';padding:2px 7px;border-radius:4px;font-size:8.5pt;font-weight:700">'+escH((r.sistema||'').toUpperCase())+'</span>';
+    var scTag     = r.sinCruz?'<span style="background:#fef3c7;color:#b45309;padding:1px 6px;border-radius:3px;font-size:8pt;font-weight:600;margin-left:4px">SIN CRUCE</span>':'';
+    var baseStyle = 'background:'+bg+';padding:7px 11px;border:1px solid #e2d5cb;vertical-align:middle;font-size:9.5pt;';
+    var monoStyle = baseStyle+'font-family:Courier New,monospace;';
+    var rStyle    = baseStyle+'text-align:right;font-family:Courier New,monospace;';
+    return '<tr>'+
+      '<td style="'+baseStyle+'">'+sysTag+'</td>'+
+      '<td style="'+monoStyle+'">'+escH(r.fecha||'')+'</td>'+
+      '<td style="'+monoStyle+'">'+escH(r.trx||'')+'</td>'+
+      '<td style="'+baseStyle+'max-width:180px">'+escH(r.cliente||'—')+'</td>'+
+      '<td style="'+monoStyle+'font-size:8.5pt">'+escH(r.ruc||'—')+'</td>'+
+      '<td style="'+baseStyle+'font-size:8.5pt;color:#42291b">'+escH(facs)+'</td>'+
+      '<td style="'+rStyle+'">'+portalStr+'</td>'+
+      '<td style="'+rStyle+'">'+sysStr+'</td>'+
+      '<td style="'+rStyle+'">'+diffCell+'</td>'+
+      '<td style="'+baseStyle+'">'+escH(r.estado||'—')+scTag+'</td>'+
+      '<td style="'+baseStyle+'font-size:8pt;color:#846f63">'+escH(r.causa||fdif||'')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var sumBg = 'background:#fff7ed;padding:8px 14px;border:1px solid #fed7aa;font-size:9.5pt;';
+  var summaryHtml = '<table style="border-collapse:collapse;margin-bottom:20px"><tr>'+
+    '<td style="'+sumBg+'font-weight:700;color:#9a3412;border-right:none">TOTAL TRANSACCIONES</td>'+
+    '<td style="'+sumBg+'font-weight:700;color:#f97316;border-left:none">'+fmt2(total)+'</td>'+
+    '<td style="width:24px"></td>'+
+    '<td style="'+sumBg+'color:#15803d">✓ Correctos</td><td style="'+sumBg+'color:#15803d;font-weight:700">'+fmt2(ok)+'</td>'+
+    '<td style="width:12px"></td>'+
+    '<td style="'+sumBg+'color:#dc2626">⚠ Con diferencia</td><td style="'+sumBg+'color:#dc2626;font-weight:700">'+fmt2(difs)+'</td>'+
+    '<td style="width:12px"></td>'+
+    '<td style="'+sumBg+'color:#b45309">○ Sin cruce</td><td style="'+sumBg+'color:#b45309;font-weight:700">'+fmt2(sc)+'</td>'+
+    '<td style="width:24px"></td>'+
+    '<td style="'+sumBg+'color:#6d28d9">Monto portal</td><td style="'+sumBg+'color:#6d28d9;font-weight:700">Gs. '+fmt(totalPortal)+'</td>'+
+    '<td style="width:12px"></td>'+
+    '<td style="'+sumBg+'color:#dc2626">Importe expuesto</td><td style="'+sumBg+'color:#dc2626;font-weight:700">Gs. '+fmt(totalExp)+'</td>'+
+  '</tr></table>';
+
+  var thStyle = 'background:#f97316;color:#ffffff;padding:9px 12px;border:1px solid #ea580c;font-size:9pt;font-weight:700;text-align:left;white-space:nowrap;';
+  var thR = thStyle+'text-align:right;';
+  var headerRow = '<tr>'+
+    '<th style="'+thStyle+'">Sistema</th>'+
+    '<th style="'+thStyle+'">Fecha</th>'+
+    '<th style="'+thStyle+'">Transacción</th>'+
+    '<th style="'+thStyle+'">Cliente</th>'+
+    '<th style="'+thStyle+'">RUC</th>'+
+    '<th style="'+thStyle+'">Facturas del pago</th>'+
+    '<th style="'+thR+'">Monto Portal</th>'+
+    '<th style="'+thR+'">Monto Sistema</th>'+
+    '<th style="'+thR+'">Diferencia</th>'+
+    '<th style="'+thStyle+'">Estado</th>'+
+    '<th style="'+thStyle+'">Obs. / Con dif.</th>'+
+  '</tr>';
+
+  var extra = extraHeader ? '<p style="font-size:9.5pt;color:#846f63;margin-bottom:8px">'+escH(extraHeader)+'</p>' : '';
+
+  var html = '<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body style="font-family:Calibri,sans-serif;color:#1c0f08;padding:20px">'+
+    '<p style="font-size:20pt;font-weight:700;color:#f97316;margin:0 0 4px">'+escH(title)+'</p>'+
+    '<p style="font-size:9pt;color:#846f63;margin:0 0 4px">'+dateStr+'&nbsp;&nbsp;·&nbsp;&nbsp;Fecha de corte: <b>'+escH(corte)+'</b></p>'+
+    extra+
+    '<p style="margin:0 0 16px"></p>'+
+    summaryHtml+
+    '<table style="border-collapse:collapse;width:100%"><thead>'+headerRow+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
+    '<p style="margin-top:20px;font-size:8pt;color:#cbb8ae">Generado por ConciliaApp · Motor de Inteligencia Financiera</p>'+
+  '</body></html>';
+
+  var blob = new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  var a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+  showToast('✓ Planilla estética generada con éxito');
 }
+
+function exportRowsXlsx(rows, filename){
+  exportStyledXls(rows, 'AUDITORÍA DE CONCILIACIÓN', filename.replace('.xlsx','.xls'));
+}
+
 function exportHistExcel(){
-  if(!ST.history.length){ customAlert('Historial vacío', 'Debe contar con al menos un análisis diario en el histórico.'); return; }
+  if(!ST.history.length){ customAlert('Historial vacío','Debe contar con al menos un análisis diario en el histórico.'); return; }
   var hist = [].concat(ST.history).sort(function(a,b){ return a.date.localeCompare(b.date); });
+  // Inject period tag into each row for display
   var all = [];
-  hist.forEach(function(h){ h.rows.forEach(function(r){ all.push(Object.assign({}, r, {_fecha_concil: h.date})); }); });
-  var h = ['Fecha Concil.','Sistema','Fecha Trx.','Transaccion','Cliente','RUC','Todas las Facturas','Factura(s) con Diferencia','Importe Portal','Importe Sistema','Diferencia','Estado','Sin cruce'];
-  var data = [h].concat(all.map(function(r){
-    var facs = (r.facturas && r.facturas.length) ? r.facturas.join(' / ') : (r.factura || '');
-    var fdif = (r.facturasDif && r.facturasDif.length) ? r.facturasDif.join(' / ') : '';
-    return [r._fecha_concil, r.sistema, r.fecha, r.trx, r.cliente, r.ruc, facs, fdif, r.impPortal, r.impSys != null ? r.impSys : '', r.diff, r.estado, r.sinCruz ? 'SI' : 'NO'];
-  }));
-  var ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:14},{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:30},{wch:30},{wch:14},{wch:14},{wch:12},{wch:12},{wch:9}];
-  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Acumulada'); XLSX.writeFile(wb, 'Reporte_Acumulado.xlsx');
-  showToast('✓ Resumen acumulado generado con éxito');
+  hist.forEach(function(h){
+    var sepRow = {_isPeriodHeader: true, _periodLabel: 'PERÍODO: '+h.date, _count: h.rows.length};
+    all.push(sepRow);
+    h.rows.forEach(function(r){ all.push(Object.assign({},r,{_fecha_concil:h.date})); });
+  });
+
+  // Build rows HTML with period headers
+  var dateStr = new Date().toLocaleDateString('es-PY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  var corte = (document.getElementById('fecha-corte')||{}).value||'—';
+  var realRows = all.filter(function(r){ return !r._isPeriodHeader; });
+  var total=realRows.length, ok=0, difs=0, sc=0, totalPortal=0, totalExp=0;
+  realRows.forEach(function(r){
+    if(!r.sinCruz&&r.impPortal!==null&&Math.abs(r.diff||0)<=0.5) ok++;
+    if(Math.abs(r.diff||0)>0.5) difs++;
+    if(r.sinCruz) sc++;
+    totalPortal+=(r.impPortal||0);
+    if(Math.abs(r.diff||0)>0.5) totalExp+=Math.abs(r.diff||0);
+  });
+
+  var sysC = {infonet:'#dbeafe;color:#1d4ed8',netel:'#e0f2fe;color:#0369a1',pronet:'#ede9fe;color:#6d28d9',compras:'#fff7ed;color:#ea580c'};
+  function rowBg(r,i){ if(r.sinCruz) return '#fffbeb'; if(r.impPortal===null) return '#f0f9ff'; if(Math.abs(r.diff||0)>0.5) return '#fff1f2'; var e=(r.estado||'').toLowerCase(); if(e==='anulado'||e==='reversado') return '#f8fafc'; return i%2===0?'#ffffff':'#faf6f2'; }
+
+  var rowIdx=0;
+  var rowsHtml = all.map(function(r){
+    if(r._isPeriodHeader){
+      return '<tr><td colspan="12" style="background:#3a1e11;color:#f97316;font-weight:700;font-size:10pt;padding:10px 14px;border:1px solid #ea580c;letter-spacing:0.5px">'+escH(r._periodLabel)+'&nbsp;&nbsp;<span style="font-weight:400;font-size:9pt;color:#cbb8ae">'+r._count+' transacciones</span></td></tr>';
+    }
+    var i=rowIdx++;
+    var bg=rowBg(r,i);
+    var facs=(r.facturas&&r.facturas.length)?r.facturas.join(', '):(r.factura||'—');
+    var fdif=(r.facturasDif&&r.facturasDif.length)?r.facturasDif.join(', '):'';
+    var diffAmt=Math.abs(r.diff||0);
+    var diffCell=diffAmt<=0.5?'<span style="color:#15803d;font-weight:600">✓</span>':'<span style="color:#dc2626;font-weight:700">'+(r.diff>0?'+':'−')+'Gs. '+fmt(diffAmt)+'</span>';
+    var sysStyle=sysC[r.sistema]||'#f1f5f9;color:#475569';
+    var sysTag='<span style="background:'+sysStyle.split(';')[0]+';'+sysStyle.split(';')[1]+';padding:2px 7px;border-radius:4px;font-size:8.5pt;font-weight:700">'+escH((r.sistema||'').toUpperCase())+'</span>';
+    var scTag=r.sinCruz?'<span style="background:#fef3c7;color:#b45309;padding:1px 6px;border-radius:3px;font-size:8pt;font-weight:600;margin-left:4px">SIN CRUCE</span>':'';
+    var bs='background:'+bg+';padding:7px 11px;border:1px solid #e2d5cb;vertical-align:middle;font-size:9.5pt;';
+    var ms=bs+'font-family:Courier New,monospace;';
+    var rs=bs+'text-align:right;font-family:Courier New,monospace;';
+    return '<tr>'+
+      '<td style="'+bs+'font-size:8.5pt;color:#6d28d9;font-family:Courier New">'+escH(r._fecha_concil||'')+'</td>'+
+      '<td style="'+bs+'">'+sysTag+'</td>'+
+      '<td style="'+ms+'">'+escH(r.fecha||'')+'</td>'+
+      '<td style="'+ms+'">'+escH(r.trx||'')+'</td>'+
+      '<td style="'+bs+'">'+escH(r.cliente||'—')+'</td>'+
+      '<td style="'+ms+'font-size:8.5pt">'+escH(r.ruc||'—')+'</td>'+
+      '<td style="'+bs+'font-size:8.5pt">'+escH(facs)+'</td>'+
+      '<td style="'+rs+'">Gs. '+fmt(r.impPortal||0)+'</td>'+
+      '<td style="'+rs+'">'+(r.impSys!=null?'Gs. '+fmt(r.impSys):'—')+'</td>'+
+      '<td style="'+rs+'">'+diffCell+'</td>'+
+      '<td style="'+bs+'">'+escH(r.estado||'—')+scTag+'</td>'+
+      '<td style="'+bs+'font-size:8pt;color:#846f63">'+escH(r.causa||fdif||'')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var sumBg='background:#fff7ed;padding:8px 14px;border:1px solid #fed7aa;font-size:9.5pt;';
+  var summaryHtml='<table style="border-collapse:collapse;margin-bottom:20px"><tr>'+
+    '<td style="'+sumBg+'font-weight:700;color:#9a3412;border-right:none">HISTORIAL ACUMULADO</td>'+
+    '<td style="'+sumBg+'font-weight:700;color:#f97316;border-left:none">'+fmt2(total)+' trx · '+hist.length+' períodos</td>'+
+    '<td style="width:24px"></td>'+
+    '<td style="'+sumBg+'color:#15803d">✓ Correctos</td><td style="'+sumBg+'font-weight:700;color:#15803d">'+fmt2(ok)+'</td>'+
+    '<td style="width:12px"></td>'+
+    '<td style="'+sumBg+'color:#dc2626">⚠ Con dif.</td><td style="'+sumBg+'font-weight:700;color:#dc2626">'+fmt2(difs)+'</td>'+
+    '<td style="width:12px"></td>'+
+    '<td style="'+sumBg+'color:#b45309">○ Sin cruce</td><td style="'+sumBg+'font-weight:700;color:#b45309">'+fmt2(sc)+'</td>'+
+    '<td style="width:24px"></td>'+
+    '<td style="'+sumBg+'color:#6d28d9">Importe expuesto</td><td style="'+sumBg+'font-weight:700;color:#dc2626">Gs. '+fmt(totalExp)+'</td>'+
+  '</tr></table>';
+
+  var thS='background:#f97316;color:#fff;padding:9px 12px;border:1px solid #ea580c;font-size:9pt;font-weight:700;text-align:left;white-space:nowrap;';
+  var thR=thS+'text-align:right;';
+  var thead='<tr><th style="'+thS+'">Período</th><th style="'+thS+'">Sistema</th><th style="'+thS+'">Fecha Trx.</th><th style="'+thS+'">Transacción</th><th style="'+thS+'">Cliente</th><th style="'+thS+'">RUC</th><th style="'+thS+'">Facturas</th><th style="'+thR+'">Monto Portal</th><th style="'+thR+'">Monto Sistema</th><th style="'+thR+'">Diferencia</th><th style="'+thS+'">Estado</th><th style="'+thS+'">Observación</th></tr>';
+
+  var html='<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body style="font-family:Calibri,sans-serif;color:#1c0f08;padding:20px">'+
+    '<p style="font-size:20pt;font-weight:700;color:#f97316;margin:0 0 4px">REPORTE ACUMULADO DE AUDITORÍA</p>'+
+    '<p style="font-size:9pt;color:#846f63;margin:0 0 16px">'+dateStr+'</p>'+
+    summaryHtml+
+    '<table style="border-collapse:collapse;width:100%"><thead>'+thead+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
+    '<p style="margin-top:20px;font-size:8pt;color:#cbb8ae">Generado por ConciliaApp · Motor de Inteligencia Financiera</p>'+
+  '</body></html>';
+
+  var blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  var fn='Reporte_Acumulado_'+new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-')+'.xls';
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn; a.click(); URL.revokeObjectURL(a.href);
+  showToast('✓ Reporte acumulado estético generado');
 }
 function exportCSV(){
   if(!ST.filtered.length){ customAlert('Registros vacíos', 'No hay registros disponibles en esta vista.'); return; }
