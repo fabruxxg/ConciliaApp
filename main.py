@@ -347,15 +347,10 @@ async def servir_dashboard():
         content = f.read()
     if CLERK_PUBLISHABLE_KEY:
         print(f"[CLERK] Inyectando key: {CLERK_PUBLISHABLE_KEY[:20]}...")
-        clerk_script = (
-            f'<script>window.clerkPublishableKey = "{CLERK_PUBLISHABLE_KEY}"; window.CLERK_PK = "{CLERK_PUBLISHABLE_KEY}";</script>\n'
-            f'<script async src="https://unpkg.com/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>\n'
-            f'<script>document.addEventListener("DOMContentLoaded", function(){{ if(window.Clerk) initClerk(); }});</script>'
-        )
+        content = content.replace("__CLERK_KEY__", CLERK_PUBLISHABLE_KEY)
     else:
         print("[CLERK] CLERK_PUBLISHABLE_KEY no seteada")
-        clerk_script = ""
-    content = content.replace("<!-- __CLERK_SCRIPT__ -->", clerk_script)
+        content = content.replace('data-clerk-publishable-key="__CLERK_KEY__"', 'data-clerk-publishable-key=""')
     return HTMLResponse(
         content=content,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
