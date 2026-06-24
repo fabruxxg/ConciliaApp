@@ -15,6 +15,8 @@
 <!-- GSAP + ScrollTrigger para animaciones 21st.dev -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.clerk.io/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>
+<script>var CLERK_PK = "__CLERK_PUBLISHABLE_KEY__";</script>
 <style>
 /* ══════════════════════════════════════
    DESIGN TOKENS — DARK (Obsidiana Cobriza / Corporativo Naranja)
@@ -1002,67 +1004,45 @@ tbody tr.has-diff td{background:var(--amberb);}
     </form>
 <script>
 async function procesarLoginFormulario(event) {
-    event.preventDefault(); // Evita que la página se recargue al instante
-
-    const email = document.getElementById('login-email').value;
-    const pass = document.getElementById('login-pass').value;
-
-    // Reseteamos el mensaje de error del formulario
+  event.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const pass  = document.getElementById('login-pass').value;
   const errorMsg = document.getElementById('login-error-msg');
   if (errorMsg) errorMsg.style.display = 'none';
 
   try {
-    // 1. Enviamos la petición al servidor de Railway
-    const res = await fetch("https://conciliaapp-production.up.railway.app/v1/auth/login", {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: email, password: pass })
-    });
+    const clerk = window.Clerk;
+    if (!clerk || !clerk.client) throw new Error('Clerk no disponible. Recargá la página.');
 
-    // 2. Si la respuesta no es correcta (ej. contraseña mal), lanzamos error
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || "Credenciales inválidas o usuario no registrado.");
-    }
+    const signIn = await clerk.client.signIn.create({ identifier: email, password: pass });
 
-    // 3. ¡AQUÍ SE DEFINE 'data'! Convertimos la respuesta en un objeto JavaScript
-    const data = await res.json();
+    if (signIn.status === 'complete') {
+      await clerk.setActive({ session: signIn.createdSessionId });
+      await refreshClerkToken();
+      updateSidebarUser(clerk.user);
 
-    // 4. Guardamos el Token JWT devuelto por Python para las futuras peticiones
-    if (data.access_token) {
-      localStorage.setItem('token', data.access_token);
-      if (typeof BACKEND_TOKEN !== 'undefined') {
-        BACKEND_TOKEN = data.access_token; // Actualiza la variable global si existe
+      const nombre = email.split('@')[0];
+      const nombreDinamico = nombre.charAt(0).toUpperCase() + nombre.slice(1);
+      if (typeof showToast === 'function') showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
+      if (typeof cargarHistorialNube === 'function') cargarHistorialNube();
+
+      const overlay = document.getElementById('login-overlay');
+      if (overlay) {
+        overlay.classList.add('login-exit-animation');
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          goTo('home', document.getElementById('sb-home'));
+          renderHomeStats();
+        }, 800);
       }
+    } else {
+      throw new Error('Verificación adicional requerida.');
     }
-
-    // 5. Leemos el nombre dinámico que nos envió Python de forma segura
-    const nombreDinamico = data.usuario_nombre || "Usuario";
-    if (typeof showToast === 'function') {
-      showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
-    }
-
-    // 6. Activamos la descarga del historial guardado en PostgreSQL
-    if (typeof cargarHistorialNube === 'function') {
-      cargarHistorialNube();
-    }
-
-    // 7. Quitamos la pantalla de login con la animación tridimensional existente
-    const overlay = document.getElementById('login-overlay');
-    if (overlay) {
-      overlay.classList.add('login-exit-animation');
-      setTimeout(() => {
-        overlay.style.display = 'none';
-        goTo('home', document.getElementById('sb-home'));
-        renderHomeStats();
-      }, 800);
-    }
-
   } catch (error) {
-    // Aquí sí se captura el error correctamente si la red o las credenciales fallan
-    console.error("Hubo un error en la ejecución del Login:", error);
+    console.error('Error en login:', error);
     if (errorMsg) {
-      errorMsg.textContent = error.message || "Error al conectar con el servidor.";
+      errorMsg.textContent = (error.errors && error.errors[0] && error.errors[0].longMessage)
+        || error.message || 'Credenciales inválidas.';
       errorMsg.style.display = 'block';
     }
   }
@@ -1139,6 +1119,19 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       </div>
       <input type="file" id="f-import-bk" accept=".json" style="display:none" onchange="importBackup(this)">
     </nav>
+  </div>
+
+  <div id="sb-user" style="display:none;padding:10px 14px;border-top:1px solid var(--border2);margin-top:auto;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="sb-user-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;">U</div>
+      <div style="flex:1;min-width:0;">
+        <div id="sb-user-name" style="font-size:12px;font-weight:600;color:var(--tx1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+        <div id="sb-user-email" style="font-size:11px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+      </div>
+      <button onclick="doSignOut()" title="Cerrar sesión" style="background:none;border:none;cursor:pointer;color:var(--tx3);padding:4px;border-radius:6px;flex-shrink:0;display:flex;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--tx3)'">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
   </div>
 
   <div class="sb-bottom">
@@ -1820,6 +1813,7 @@ function renderizarHistorialEnInterfaz(historial) {
     animate();
     init3DTilt();
     initLoginParticles();
+    setTimeout(initClerk, 300);
   }
 })();
 
@@ -2042,7 +2036,52 @@ function showToast(msg){
 // ══ ESTADOS GLOBALES ══
 var ST = {files: {}, rows: [], sessionRows: [], filtered: [], page: 1, perPage: 50, charts: {}, history: [], comprasStats: null};
 var API_BASE = 'https://conciliaapp-production.up.railway.app';
-function apiToken(){ return localStorage.getItem('token') || ''; }
+var _clerkToken = '';
+async function refreshClerkToken() {
+  if (window.Clerk && window.Clerk.session) {
+    _clerkToken = await window.Clerk.session.getToken() || '';
+  }
+}
+function apiToken() { return _clerkToken || localStorage.getItem('token') || ''; }
+
+function updateSidebarUser(user) {
+  var emailAddr = (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || '';
+  var name = user.firstName || emailAddr.split('@')[0] || 'Usuario';
+  var el = document.getElementById('sb-user');
+  if (el) {
+    el.style.display = 'block';
+    document.getElementById('sb-user-avatar').textContent = name.charAt(0).toUpperCase();
+    document.getElementById('sb-user-name').textContent = name;
+    document.getElementById('sb-user-email').textContent = emailAddr;
+  }
+}
+
+async function doSignOut() {
+  if (window.Clerk) await window.Clerk.signOut();
+  _clerkToken = '';
+  localStorage.removeItem('token');
+  location.reload();
+}
+
+async function initClerk() {
+  var pk = window.CLERK_PK;
+  if (!pk || pk === '__CLERK_PUBLISHABLE_KEY__' || !window.Clerk) return;
+  try {
+    var clerk = new window.Clerk(pk);
+    await clerk.load();
+    window.Clerk = clerk;
+    setInterval(refreshClerkToken, 50000);
+    if (clerk.user) {
+      await refreshClerkToken();
+      updateSidebarUser(clerk.user);
+      cargarHistorialNube();
+      var overlay = document.getElementById('login-overlay');
+      if (overlay) overlay.style.display = 'none';
+      goTo('home', document.getElementById('sb-home'));
+      if (typeof renderHomeStats === 'function') renderHomeStats();
+    }
+  } catch(e) { console.warn('Clerk init error:', e); }
+}
 
 // Compact row storage: arrays use ~57% less space than named-field objects
 function _r2a(r){return[r.sistema||'',r.fecha||'',r.trx||'',r.nroRaw||'',r.cliente||'',r.ruc||'',r.factura||'',r.impPortal,r.impSys,r.diff,r.sinCruz?1:0,r.estado||'',r.causa||'',(r.facturas&&r.facturas.length?r.facturas.join('|'):''),(r.facturasDif&&r.facturasDif.length?r.facturasDif.join('|'):''),(r.facturaDetalle&&r.facturaDetalle.length?JSON.stringify(r.facturaDetalle):'')];}

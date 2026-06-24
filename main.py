@@ -3,7 +3,9 @@ import uuid
 import jwt
 import json
 import time
+import base64 as _b64
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import pandas as pd
@@ -17,17 +19,51 @@ from models import User, ReconciliationHistory, Candidate
 from sqlmodel import Session, select
 import os
 from reconciliation import concil_infornet, concil_netel, concil_pronet, concil_compras
+from jwt import PyJWKClient
+
+
+@dataclass
+class ClerkUser:
+    id: int = 0
+    email: str = ""
+
+
+def _clerk_jwks_url(pk: str) -> str:
+    try:
+        b64 = pk.split('_')[2]
+        b64 += '=' * (-len(b64) % 4)
+        domain = _b64.b64decode(b64).decode('utf-8').rstrip('$\x00').strip()
+        return f"https://{domain}/.well-known/jwks.json"
+    except Exception:
+        return ""
 
 app = FastAPI()
 
 # ── Secrets desde env vars (setear en Railway Variables) ──────────────
-SECRET_KEY  = os.getenv("JWT_SECRET",   "CONCILIA_APP_SUPER_SECRET_KEY_2026")
-BOT_SECRET  = os.getenv("BOT_SECRET",   "shift2026recruit")
-ADMIN_PASS  = os.getenv("ADMIN_PASSWORD", "")
+SECRET_KEY           = os.getenv("JWT_SECRET",          "CONCILIA_APP_SUPER_SECRET_KEY_2026")
+BOT_SECRET           = os.getenv("BOT_SECRET",          "shift2026recruit")
+ADMIN_PASS           = os.getenv("ADMIN_PASSWORD",       "")
+CLERK_PUBLISHABLE_KEY = os.getenv("CLERK_PUBLISHABLE_KEY", "")
+CLERK_JWKS_URL       = os.getenv("CLERK_JWKS_URL",       _clerk_jwks_url(CLERK_PUBLISHABLE_KEY))
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
     "ALLOWED_ORIGINS",
     "https://conciliaapp-production.up.railway.app"
 ).split(",")]
+
+_jwks_client: Optional[PyJWKClient] = None
+
+def _get_clerk_jwks() -> Optional[PyJWKClient]:
+    global _jwks_client
+    if _jwks_client is None and CLERK_JWKS_URL:
+        _jwks_client = PyJWKClient(CLERK_JWKS_URL, cache_keys=True)
+    return _jwks_client
+
+def _verify_clerk_token(token: str) -> dict:
+    client = _get_clerk_jwks()
+    if client is None:
+        raise ValueError("Clerk JWKS not configured")
+    signing_key = client.get_signing_key_from_jwt(token)
+    return jwt.decode(token, signing_key.key, algorithms=["RS256"], options={"verify_aud": False})
 
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="v1/auth/login")
@@ -100,23 +136,30 @@ async def get_current_tenant(token: str = Depends(oauth2_scheme)) -> Dict[str, A
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    # Try Clerk JWT first (RS256 signed by Clerk)
+    if CLERK_JWKS_URL:
+        try:
+            payload = _verify_clerk_token(token)
+            clerk_user_id: str = payload.get("sub", "")
+            if clerk_user_id:
+                return ClerkUser(id=0, email=clerk_user_id)
+        except Exception:
+            pass  # fall through to legacy JWT
+
+    # Legacy JWT (HS256, for backward compat during transition)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            raise credentials_exception
+            raise HTTPException(status_code=401, detail="Token inválido")
     except jwt.PyJWTError:
-        raise credentials_exception
+        raise HTTPException(status_code=401, detail="Token inválido",
+                            headers={"WWW-Authenticate": "Bearer"})
 
     with Session(engine) as session:
         user = session.exec(select(User).where(User.email == email)).first()
         if user is None:
-            raise credentials_exception
+            raise HTTPException(status_code=401, detail="Usuario no encontrado")
         return user
 
 
@@ -300,12 +343,13 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
 
 @app.get("/", response_class=HTMLResponse)
 async def servir_dashboard():
-    nombre_archivo = "ConciliaAppXX.html"
-    with open(nombre_archivo, "r", encoding="utf-8") as f:
-        return HTMLResponse(
-            content=f.read(),
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
-        )
+    with open("ConciliaAppXX.html", "r", encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace("__CLERK_PUBLISHABLE_KEY__", CLERK_PUBLISHABLE_KEY)
+    return HTMLResponse(
+        content=content,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+    )
 
 
 @app.get("/v1/reconciliations/history")
