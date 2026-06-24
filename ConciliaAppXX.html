@@ -4436,6 +4436,16 @@ var RC_CANAL_COLOR = {
 
 function rcApiBase(){ return window.location.origin; }
 
+function fixMojibake(s){
+  if(!s) return s;
+  try{ return decodeURIComponent(escape(s)); }catch(e){ return s; }
+}
+function fixCandidate(c){
+  var fields = ['name','observaciones','cv_text','canal','prioridad','sesion'];
+  fields.forEach(function(f){ if(c[f]) c[f] = fixMojibake(c[f]); });
+  return c;
+}
+
 function loadRecruit(){
   var tbody = document.getElementById('rc-tbody');
   tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--tx3);padding:40px">Cargando…</td></tr>';
@@ -4444,7 +4454,7 @@ function loadRecruit(){
   fetch(rcApiBase()+'/v1/recruitment/candidates', {headers:{'Authorization':'Bearer '+token}})
     .then(function(r){ return r.json(); })
     .then(function(data){
-      RC.candidates = Array.isArray(data) ? data : [];
+      RC.candidates = (Array.isArray(data) ? data : []).map(fixCandidate);
       renderRecruit();
     })
     .catch(function(){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--red);padding:40px">Error al cargar candidatos.</td></tr>'; });
