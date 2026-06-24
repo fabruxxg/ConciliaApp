@@ -1003,47 +1003,11 @@ tbody tr.has-diff td{background:var(--amberb);}
 <script>
 async function procesarLoginFormulario(event) {
   event.preventDefault();
-  const email = document.getElementById('login-email').value;
-  const pass  = document.getElementById('login-pass').value;
-  const errorMsg = document.getElementById('login-error-msg');
-  if (errorMsg) errorMsg.style.display = 'none';
-
-  try {
-    const clerk = window.Clerk;
-    if (!clerk || !clerk.client) throw new Error('Clerk no disponible. Recargá la página.');
-
-    const signIn = await clerk.client.signIn.create({ identifier: email, password: pass });
-
-    if (signIn.status === 'complete') {
-      await clerk.setActive({ session: signIn.createdSessionId });
-      await refreshClerkToken();
-      updateSidebarUser(clerk.user);
-
-      const nombre = email.split('@')[0];
-      const nombreDinamico = nombre.charAt(0).toUpperCase() + nombre.slice(1);
-      if (typeof showToast === 'function') showToast(`¡Bienvenido de vuelta, ${nombreDinamico}!`);
-      if (typeof cargarHistorialNube === 'function') cargarHistorialNube();
-
-      const overlay = document.getElementById('login-overlay');
-      if (overlay) {
-        overlay.classList.add('login-exit-animation');
-        setTimeout(() => {
-          overlay.style.display = 'none';
-          goTo('home', document.getElementById('sb-home'));
-          renderHomeStats();
-        }, 800);
-      }
-    } else {
-      throw new Error('Verificación adicional requerida.');
-    }
-  } catch (error) {
-    console.error('Error en login:', error);
-    if (errorMsg) {
-      errorMsg.textContent = (error.errors && error.errors[0] && error.errors[0].longMessage)
-        || error.message || 'Credenciales inválidas.';
-      errorMsg.style.display = 'block';
-    }
+  if (!window.Clerk) {
+    alert('Clerk no disponible. Recargá la página.');
+    return;
   }
+  window.Clerk.openSignIn({ forceRedirectUrl: window.location.href });
 }
 
 // Vinculamos el formulario directamente a la función
