@@ -1368,6 +1368,17 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
         <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
       </div>
     </div>
+    <div id="dash-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px">
+      <svg viewBox="0 0 64 64" width="72" height="72" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity:0.25">
+        <rect x="8" y="8" width="20" height="20" rx="3" stroke="currentColor" stroke-width="2.5"/>
+        <rect x="36" y="8" width="20" height="20" rx="3" stroke="currentColor" stroke-width="2.5"/>
+        <rect x="8" y="36" width="20" height="20" rx="3" stroke="currentColor" stroke-width="2.5"/>
+        <rect x="36" y="36" width="20" height="20" rx="3" stroke="currentColor" stroke-width="2.5"/>
+      </svg>
+      <div style="font-size:17px;font-weight:700;color:var(--tx1);opacity:0.5">Sin conciliación activa</div>
+      <div style="font-size:13px;color:var(--tx3);max-width:340px;text-align:center;line-height:1.6">Cargá los archivos de los canales en <strong>Cargar archivos</strong> y ejecutá la conciliación para visualizar el análisis ejecutivo.</div>
+      <button class="act-btn primary" onclick="goTo('upload', document.querySelector('.sb-item'))" style="margin-top:8px">Ir a Cargar archivos</button>
+    </div>
     <div id="dash-content" style="display:none">
       <div class="dash-top">
         <div class="dash-label" id="dash-period"></div>
@@ -2142,11 +2153,15 @@ function goTo(name, el){
   document.getElementById('tb-page').textContent = pageNames[name] || name;
   if(name === 'hist') renderHist();
   if(name === 'dash'){
+    var de = document.getElementById('dash-empty');
+    var dc = document.getElementById('dash-content');
     if(ST.sessionRows.length){
+      if(de) de.style.display = 'none';
+      if(dc) dc.style.display = 'block';
       renderDash(ST.sessionRows);
     } else {
-      var dc = document.getElementById('dash-content');
-      if(dc) dc.innerHTML = '<div style="text-align:center;padding:80px;color:var(--tx3);font-size:15px">Cargá archivos y ejecutá una conciliación para ver el dashboard.</div>';
+      if(dc) dc.style.display = 'none';
+      if(de) de.style.display = 'flex';
     }
   }
   if(name === 'tbl'){ ST.filtered = ST.viewRows || ST.rows; renderTbl(); }
