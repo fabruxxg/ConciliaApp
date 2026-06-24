@@ -345,7 +345,14 @@ async def get_task_status(task_id: str, tenant: dict = Depends(get_current_tenan
 async def servir_dashboard():
     with open("ConciliaAppXX.html", "r", encoding="utf-8") as f:
         content = f.read()
-    content = content.replace("__CLERK_PUBLISHABLE_KEY__", CLERK_PUBLISHABLE_KEY)
+    if CLERK_PUBLISHABLE_KEY:
+        clerk_script = (
+            f'<script src="https://unpkg.com/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>\n'
+            f'<script>var CLERK_PK = "{CLERK_PUBLISHABLE_KEY}";</script>'
+        )
+    else:
+        clerk_script = ""
+    content = content.replace("<!-- __CLERK_SCRIPT__ -->", clerk_script)
     return HTMLResponse(
         content=content,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
