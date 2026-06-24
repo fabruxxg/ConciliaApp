@@ -2,6 +2,8 @@ import io
 import uuid
 import jwt
 import json
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, Any
 import pandas as pd
@@ -17,41 +19,58 @@ import os
 
 app = FastAPI()
 
+# ── Secrets desde env vars (setear en Railway Variables) ──────────────
+SECRET_KEY  = os.getenv("JWT_SECRET",   "CONCILIA_APP_SUPER_SECRET_KEY_2026")
+BOT_SECRET  = os.getenv("BOT_SECRET",   "shift2026recruit")
+ADMIN_PASS  = os.getenv("ADMIN_PASSWORD", "")
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
+    "ALLOWED_ORIGINS",
+    "https://conciliaapp-production.up.railway.app"
+).split(",")]
+
+ALGORITHM = "HS256"
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="v1/auth/login")
+
+# ── Rate limiting login (in-memory, max 10 intentos / 15 min por IP) ──
+_login_attempts: dict = defaultdict(list)
+
+def _check_login_rate(ip: str):
+    now = time.time()
+    window = 900  # 15 min
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < window]
+    if len(_login_attempts[ip]) >= 10:
+        raise HTTPException(status_code=429, detail="Demasiados intentos fallidos. Esperá 15 minutos.")
+    _login_attempts[ip].append(now)
+
 @app.on_event("startup")
 def on_startup():
     init_db()
 
+    if not ADMIN_PASS:
+        print("ADVERTENCIA: ADMIN_PASSWORD no configurado en Railway — no se crean usuarios automáticos.")
+        return
+
     with Session(engine) as session:
         usuarios_a_crear = [
             "fabrigaoli@gmail.com",
-            "tu-correo-personal@retail.com.py",
-            "auditor@retail.com.py",
-            "gerencia@retail.com.py"
         ]
-
         for email_usuario in usuarios_a_crear:
             statement = select(User).where(User.email == email_usuario)
             usuario_existente = session.exec(statement).first()
-
             if not usuario_existente:
                 nuevo_usuario = User(email=email_usuario)
-                nuevo_usuario.set_password("Fg200472")
+                nuevo_usuario.set_password(ADMIN_PASS)
                 session.add(nuevo_usuario)
-                print(f"¡Usuario {email_usuario} creado con éxito!")
-
+                print(f"Usuario {email_usuario} creado.")
         session.commit()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Bot-Secret"],
 )
-
-SECRET_KEY = "CONCILIA_APP_SUPER_SECRET_KEY_2026"
-ALGORITHM = "HS256"
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="v1/auth/login")
 
 TASKS_DB: Dict[str, Dict[str, Any]] = {}
 
@@ -166,15 +185,15 @@ def core_reconciliation_worker(task_id: str, mayor_bytes: bytes, gateway_bytes: 
 # 3. ENDPOINT DE AUTENTICACIÓN (LOGIN)
 # ═════════════════════════════════════════════════════════════════════
 @app.post("/v1/auth/login")
-def login(formulario_data: dict = None, session: Session = Depends(get_session)):
+def login(request: Request, formulario_data: dict = None, session: Session = Depends(get_session)):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_login_rate(client_ip)
+
     if formulario_data is None:
         return {"error": "El servidor no recibió ningún dato"}
 
     if not formulario_data:
-        raise HTTPException(
-            status_code=401,
-            detail="ERRORfrontend: El servidor recibió un formulario totalmente VACÍO."
-        )
+        raise HTTPException(status_code=401, detail="Formulario vacío.")
 
     email_recibido = formulario_data.get("email") or formulario_data.get("username")
     password_recibida = formulario_data.get("password")
@@ -338,7 +357,6 @@ async def eliminar_historial(entry_id: int, current_user: User = Depends(get_cur
 # ═════════════════════════════════════════════════════════════════════
 # 5. RECLUTAMIENTO
 # ═════════════════════════════════════════════════════════════════════
-BOT_SECRET = os.getenv("BOT_SECRET", "shift2026recruit")
 
 def _check_bot(request: Request):
     secret = request.headers.get("X-Bot-Secret", "")
