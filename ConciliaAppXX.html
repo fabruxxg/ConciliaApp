@@ -1589,8 +1589,10 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       <option value="Muy Bajo">Muy Bajo</option>
     </select>
     <input id="rc-search" oninput="renderRecruit()" placeholder="Buscar nombre o teléfono…" style="padding:7px 12px;border:1px solid var(--brd);border-radius:8px;background:var(--card);color:var(--tx1);font-size:13px;min-width:200px">
-    <div style="margin-left:auto;display:flex;gap:8px">
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <button class="act-btn" onclick="loadRecruit()">↻ Actualizar</button>
+      <button class="act-btn" onclick="document.getElementById('rc-json-input').click()" title="Subir archivo JSON con candidatos ya puntuados">⬆ Subir JSON</button>
+      <input type="file" id="rc-json-input" accept=".json" style="display:none" onchange="uploadJsonCandidates(this)">
       <button class="act-btn primary" onclick="exportRecruitExcel()">Exportar Excel</button>
       <button class="act-btn danger" onclick="clearRecruitConfirm()">Limpiar base</button>
     </div>
@@ -4654,6 +4656,40 @@ function exportRecruitExcel(){
   var fn='Reclutamiento_CentralShop_'+new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-')+'.xls';
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn; a.click(); URL.revokeObjectURL(a.href);
   showToast('✓ Reporte de reclutamiento exportado');
+}
+
+function uploadJsonCandidates(input){
+  var file = input.files[0];
+  if(!file){ return; }
+  var token = localStorage.getItem('token');
+  if(!token){ customAlert('Sesión','Iniciá sesión primero.'); input.value=''; return; }
+
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var data;
+    try{ data = JSON.parse(e.target.result); }
+    catch(err){ customAlert('Error','Archivo JSON inválido: ' + err.message); input.value=''; return; }
+    if(!Array.isArray(data)){ customAlert('Error','El archivo debe contener un arreglo JSON de candidatos.'); input.value=''; return; }
+
+    showToast('⏳ Subiendo ' + data.length + ' candidatos…');
+    fetch(window.location.origin + '/v1/recruitment/candidates/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(data)
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if(res.status === 'ok'){
+        showToast('✓ ' + res.nuevos + ' nuevos · ' + res.actualizados + ' actualizados de ' + res.total + ' enviados');
+        loadRecruit();
+      } else {
+        customAlert('Error al subir', JSON.stringify(res));
+      }
+    })
+    .catch(function(err){ customAlert('Error de red', err.message); })
+    .finally(function(){ input.value = ''; });
+  };
+  reader.readAsText(file, 'utf-8');
 }
 </script>
 </body>

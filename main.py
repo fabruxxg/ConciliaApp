@@ -387,6 +387,49 @@ async def upsert_candidates(request: Request):
         session.commit()
     return {"status": "ok", "saved": saved, "total": len(candidates)}
 
+@app.post("/v1/recruitment/candidates/upload")
+async def upload_candidates_bulk(request: Request, current_user: User = Depends(get_current_user)):
+    body = await request.json()
+    candidates = body if isinstance(body, list) else [body]
+    saved = 0
+    updated = 0
+    with Session(engine) as session:
+        for c in candidates:
+            existing = session.exec(
+                select(Candidate).where(
+                    Candidate.phone == str(c.get("phone","")).strip(),
+                    Candidate.linea == c.get("linea", 1)
+                )
+            ).first()
+            if existing:
+                for k in ["name","cv_text","score_cc","score_ventas","score_rrss","score_presion","score_perfil","total","canal","prioridad","observaciones","sesion"]:
+                    v = c.get(k)
+                    if v is not None:
+                        setattr(existing, k, v)
+                session.add(existing)
+                updated += 1
+            else:
+                entry = Candidate(
+                    phone=str(c.get("phone","")).strip(),
+                    name=c.get("name",""),
+                    cv_text=c.get("cv_text"),
+                    score_cc=c.get("score_cc"),
+                    score_ventas=c.get("score_ventas"),
+                    score_rrss=c.get("score_rrss"),
+                    score_presion=c.get("score_presion"),
+                    score_perfil=c.get("score_perfil"),
+                    total=c.get("total"),
+                    canal=c.get("canal"),
+                    prioridad=c.get("prioridad"),
+                    observaciones=c.get("observaciones"),
+                    linea=c.get("linea", 1),
+                    sesion=c.get("sesion"),
+                )
+                session.add(entry)
+                saved += 1
+        session.commit()
+    return {"status": "ok", "nuevos": saved, "actualizados": updated, "total": len(candidates)}
+
 @app.get("/v1/recruitment/candidates")
 async def get_candidates(current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
