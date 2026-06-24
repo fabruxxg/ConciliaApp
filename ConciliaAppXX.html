@@ -2142,10 +2142,14 @@ function goTo(name, el){
   document.getElementById('tb-page').textContent = pageNames[name] || name;
   if(name === 'hist') renderHist();
   if(name === 'dash'){
-    var dashRows = ST.sessionRows.length ? ST.sessionRows : ST.rows;
-    if(dashRows.length) renderDash(dashRows);
+    if(ST.sessionRows.length){
+      renderDash(ST.sessionRows);
+    } else {
+      var dc = document.getElementById('dash-content');
+      if(dc) dc.innerHTML = '<div style="text-align:center;padding:80px;color:var(--tx3);font-size:15px">Cargá archivos y ejecutá una conciliación para ver el dashboard.</div>';
+    }
   }
-  if(name === 'tbl'){ ST.filtered = ST.rows; renderTbl(); }
+  if(name === 'tbl'){ ST.filtered = ST.viewRows || ST.rows; renderTbl(); }
   if(name === 'recruit'){ loadRecruit(); botPoll(); botPollStart(false); }
   else { if(BOT.pollTimer){ clearInterval(BOT.pollTimer); BOT.pollTimer=null; } }
 }
@@ -2741,6 +2745,7 @@ function runConcil(){
   var today = new Date().toLocaleDateString('es-PY', {day: '2-digit', month: '2-digit', year: 'numeric'});
   // Reset session snapshot so goTo('dash') below doesn't render stale data from a previous run
   ST.sessionRows = [];
+  ST.viewRows = null;
   goTo('dash', document.querySelectorAll('.sb-item')[2]);
   document.getElementById('dash-prog').style.display = 'block';
   document.getElementById('dash-content').style.display = 'none';
@@ -2903,7 +2908,7 @@ function renderHist(){
   setTimeout(init3DTilt, 50); // Reactivar tilt para históricos renderizados
 }
 function toggleDay(i){ var b = document.getElementById('body-'+i); var a = document.getElementById('arr-'+i); var o = b.classList.toggle('open'); if(a) a.classList.toggle('open',o); }
-function viewDay(i){ ST.rows = ST.history[i].rows; ST.filtered = ST.rows; goTo('tbl', document.querySelectorAll('.sb-item')[3]); }
+function viewDay(i){ ST.viewRows = ST.history[i].rows; ST.filtered = ST.viewRows; goTo('tbl', document.querySelectorAll('.sb-item')[3]); }
 function exportDay(i){
   var h=ST.history[i];
   var hasC=h.rows.some(function(r){return r.sistema==='compras';});
@@ -3097,7 +3102,7 @@ function sortTbl(col){
 }
 function setF(f, btn){ AF = f; document.querySelectorAll('#scr-tbl .pill').forEach(function(p){ p.classList.remove('on'); }); btn.classList.add('on'); ST.page = 1; renderTbl(); }
 function renderTbl(){
-  var rows = [].concat(ST.rows); var q = (document.getElementById('srch')?.value || '').toLowerCase();
+  var rows = [].concat(ST.filtered.length ? ST.filtered : ST.rows); var q = (document.getElementById('srch')?.value || '').toLowerCase();
   
   // Logica de filtros ampliada
   if(AF === 'diff') rows = rows.filter(function(r){ return Math.abs(r.diff) > 0.5; });
