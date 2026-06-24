@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -2359,488 +2359,90 @@ function injectMockDataAndRun() {
   });
 }
 
-// ══ LÓGICA INTERNA DE CONCILIACIÓN POR PROVEEDOR ══
-function concilInfornet(pBuf, sBuf){
-  var dec = new TextDecoder('iso-8859-1');
-  var lines = dec.decode(pBuf).split(/\r?\n/).filter(function(l){ return l.trim(); });
-  var hdrs = lines[0].split(';').map(function(h){ return h.trim(); });
-  var portal = lines.slice(1).map(function(line){
-    var v = line.split(';'); var o = {};
-    hdrs.forEach(function(h, i){ o[h] = (v[i] || '').trim(); });
-    return o;
-  }).filter(function(r){ return r['Nro. transaccion']; });
 
-  var sys = readSheet(sBuf).filter(function(r){
-    var c = String(r['Cód. Comprobante'] || '').trim().replace(/\.0$/, '');
-    return c === '30' || String(r['Comprobante'] || '').toUpperCase().includes('INFONET');
-  });
-
-  // Collect ALL system rows per transaction (one trx can have multiple facturas)
-  var sMap = {};
-  sys.forEach(function(r){
-    var t = String(r['Transacción'] || '').trim().replace(/\.0$/, '');
-    if(!t) return;
-    if(!sMap[t]) sMap[t] = [];
-    sMap[t].push(r);
-  });
-
-  return portal.map(function(r){
-    var trx = String(r['Nro. transaccion'] || '').trim().replace(/\.0$/, '');
-    var imp = num(r['Importe']);
-    var sArr = sMap[trx] || [];
-    var iS = sArr.length ? sArr.reduce(function(a,x){ return a + num(x['Importe Total']); }, 0) : null;
-    var diff = iS !== null ? imp - iS : 0;
-    var detalle = sArr.map(function(x){ return {nro: String(x['Numero Factura']||'').trim(), importe: num(x['Importe Total'])}; });
-    var facturas = detalle.map(function(x){ return x.nro; }).filter(Boolean);
-    var facturasDif = (iS !== null && Math.abs(diff) > 0.5) ? facturas : [];
-    return {
-      sistema: 'infonet', fecha: r['Fecha de venta'] || '', trx: trx,
-      cliente: sArr.length ? String(sArr[0]['Cliente']||'').trim() : String(r['Empresa']||'').trim(),
-      ruc: sArr.length ? String(sArr[0]['RUC']||'').trim() : '',
-      factura: facturas.join(' / '), facturas: facturas, facturasDif: facturasDif, facturaDetalle: detalle,
-      impPortal: imp, impSys: iS, diff: diff, sinCruz: iS === null,
-      estado: r['Estado'] || '', causa: iS !== null && Math.abs(diff) > 0.5 ? 'Desvío de importe detectado' : ''
-    };
-  });
-}
-
-function concilNetel(pBuf, sBuf){
-  var raw = readSheet(pBuf, 1); if(!raw.length) return [];
-  var colId = Object.keys(raw[0]).find(function(k){ return k.toLowerCase().includes('dato'); }) || 'Dato id';
-  var colT = Object.keys(raw[0]).find(function(k){ return k.toLowerCase() === 'total'; }) || 'Total';
-  var colF = Object.keys(raw[0]).find(function(k){ return k.toLowerCase().startsWith('fec'); }) || 'Fecha';
-
-  var aggP = {};
-  raw.forEach(function(r){
-    var rawId = String(r[colId] || '').trim(); if(!rawId || rawId === colId) return;
-    var id = netelId(rawId);
-    if(!aggP[id]) aggP[id] = {total: 0, fecha: String(r[colF] || '').trim()};
-    aggP[id].total += num(r[colT]);
-  });
-
-  var sys = readSheet(sBuf).filter(function(r){
-    var c = String(r['Cód. Comprobante'] || '').trim().replace(/\.0$/, '');
-    return c === '40' || String(r['Comprobante'] || '').toUpperCase().includes('EXPRESS');
-  });
-
-  // Collect ALL facturas per RUC and per factura number (one client can have multiple facturas)
-  var aR = {}, aF = {};
-  sys.forEach(function(r){
-    var ruc = String(r['RUC'] || '').trim();
-    var fac = String(r['Numero Factura'] || '').trim();
-    var tot = num(r['Importe Total']);
-    var cli = String(r['Cliente'] || '').trim();
-    if(ruc){
-      if(!aR[ruc]) aR[ruc] = {total: 0, facturas: [], cliente: cli, ruc: ruc};
-      aR[ruc].total += tot;
-      if(fac) aR[ruc].facturas.push({nro: fac, importe: tot});
-    }
-    if(fac){
-      if(!aF[fac]) aF[fac] = {total: 0, facturas: [], cliente: cli, ruc: ruc};
-      aF[fac].total += tot;
-      aF[fac].facturas.push({nro: fac, importe: tot});
-    }
-  });
-
-  return Object.entries(aggP).map(function(entry){
-    var id = entry[0], pd = entry[1];
-    var s = aR[id] || aF[id] || null;
-    var iS = s ? s.total : null;
-    var diff = iS !== null ? pd.total - iS : 0;
-    var detalle = s ? s.facturas : [];
-    var facturas = detalle.map(function(x){ return x.nro; }).filter(Boolean);
-    var facturasDif = (iS !== null && Math.abs(diff) > 0.5) ? facturas : [];
-    return {
-      sistema: 'netel', fecha: pd.fecha, trx: id,
-      cliente: s ? s.cliente : '',
-      ruc: s ? (s.ruc || id) : id,
-      factura: facturas.join(' / '), facturas: facturas, facturasDif: facturasDif, facturaDetalle: detalle,
-      impPortal: pd.total, impSys: iS, diff: diff, sinCruz: iS === null,
-      estado: 'CO', causa: iS !== null && Math.abs(diff) > 0.5 ? 'Desvío de importe detectado' : ''
-    };
-  });
-}
-
-function concilPronet(pBuf, sBuf){
-  var portal = [];
-  try {
-    var htmlText = new TextDecoder('utf-8').decode(pBuf);
-    var doc = new DOMParser().parseFromString(htmlText, 'text/html');
-    var table = doc.querySelector('table');
-    if(table){
-      var ths = Array.from(table.querySelectorAll('thead th'));
-      var hdrs = ths.map(function(th){ return th.textContent.trim(); });
-      Array.from(table.querySelectorAll('tbody tr')).forEach(function(tr){
-        var tds = Array.from(tr.querySelectorAll('td')); if(!tds.length) return;
-        var obj = {};
-        hdrs.forEach(function(h, i){ obj[h] = tds[i] ? tds[i].textContent.trim() : ''; });
-        if(obj['Banco'] && obj['Banco'].length > 0) portal.push(obj);
-      });
-    }
-  } catch(e) { console.error('Error portal Pronet:', e); }
-
-  var sysAll = readSheet(sBuf);
-  var sys = sysAll.filter(function(r){
-    if(String(r['Fecha'] || '').trim().toUpperCase() === 'TOTAL') return false;
-    var cod = parseInt(String(r['Cód. Comprobante'] || r['Cod. Comprobante'] || '').trim());
-    return cod === 20 || String(r['Comprobante'] || '').toUpperCase().includes('PRONET');
-  });
-
-  // Collect ALL system rows per transaction (one trx can have multiple facturas)
-  var sMap = {};
-  sys.forEach(function(r){
-    var rawT = String(r['Transacción'] || '').trim();
-    var t = rawT.indexOf('.') > -1 ? String(parseInt(rawT)) : rawT;
-    if(!t || t === 'NaN' || t === '') return;
-    if(!sMap[t]) sMap[t] = [];
-    sMap[t].push(r);
-  });
-
-  return portal.map(function(r){
-    var rawTrx = String(r['Codigo Trx.'] || '').trim();
-    var trx = rawTrx.indexOf('.') > -1 ? String(parseInt(rawTrx)) : rawTrx;
-    if(!trx || trx === 'NaN' || trx === '') return null;
-    var imp = num(r['Importe']);
-    var est = String(r['Confirmado/Anulado'] || '').trim();
-    var sArr = sMap[trx] || [];
-    var iS = sArr.length ? sArr.reduce(function(a,x){ return a + num(x['Importe Total']); }, 0) : null;
-    var diff = iS !== null ? imp - iS : 0;
-    var detalle = sArr.map(function(x){ return {nro: String(x['Numero Factura']||'').trim(), importe: num(x['Importe Total'])}; });
-    var facturas = detalle.map(function(x){ return x.nro; }).filter(Boolean);
-    var facturasDif = (iS !== null && Math.abs(diff) > 0.5) ? facturas : [];
-    var fallbackFac = String(r['Referencia Pago'] || '').trim().replace(/^'/, '');
-    return {
-      sistema: 'pronet', fecha: String(r['Fecha Cobro'] || '').trim(), trx: trx,
-      cliente: sArr.length ? String(sArr[0]['Cliente']||'').trim() : '',
-      ruc: sArr.length ? String(sArr[0]['RUC']||'').trim() : '',
-      factura: facturas.length ? facturas.join(' / ') : fallbackFac,
-      facturas: facturas.length ? facturas : (fallbackFac ? [fallbackFac] : []),
-      facturasDif: facturasDif, facturaDetalle: detalle,
-      impPortal: imp, impSys: iS, diff: diff, sinCruz: iS === null,
-      estado: est, causa: iS !== null && Math.abs(diff) > 0.5 ? 'Desvío de importe detectado' : ''
-    };
-  }).filter(Boolean);
-}
-
-// Helper para lectura de Excel
-function readSheet(buf, skip){
-  skip = skip || 0;
-  if(buf === true) return []; // Fallback seguro para modo Demo
-  var wb = XLSX.read(buf, {type: 'array', cellDates: true});
-  var ws = wb.Sheets[wb.SheetNames[0]];
-  var data = XLSX.utils.sheet_to_json(ws, {header: 1, raw: false, defval: ''});
-  if(skip > 0) data.splice(0, skip);
-  var h = data[0].map(function(x){ return String(x).trim(); });
-  return data.slice(1).map(function(row){
-    var o = {};
-    h.forEach(function(k, i){ o[k] = String(row[i] || '').trim(); });
-    return o;
-  });
-}
-
-// ══ CONCILIACIÓN LIBRO COMPRAS vs MARANGATU (SET) ══
-function concilCompras(bufM, bufL){
-  // ── Helpers ──
-  // Strip any non-numeric separator (dash, dot, space, slash) then remove leading zeros
-  function normNro(n){ var s = String(n||'').replace(/[^0-9]/g,'').replace(/^0+/,''); return s || '0'; }
-  // Strip check digit (after last dash) then keep only digits — handles dots "80.049.965-5" → "80049965"
-  function normRuc(r){ var s = String(r||'').trim().replace(/-\d{1,2}$/, ''); return s.replace(/[^0-9]/g,'') || s.trim(); }
-  function excelDateToStr(v){
-    if(!v) return '';
-    if(typeof v === 'string'){
-      if(v.match(/^\d{4}-\d{2}-\d{2}/)) return v.split(' ')[0]; // already ISO
-      var dm=v.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-      if(dm) return dm[3]+'-'+dm[2]+'-'+dm[1]; // DD/MM/YYYY → YYYY-MM-DD
-    }
-    var n=parseFloat(v);
-    if(isNaN(n)) return String(v).split(' ')[0];
-    var d=new Date(Math.round((n-25569)*86400*1000));
-    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
-  }
-  var corteVal=document.getElementById('fecha-corte').value; // YYYY-MM-DD, empty = no cutoff
-
-  // ── 1. Parsear Marangatu (CSV o XLSX) ──
-  var mapM = {};
-  // Marangatu CSVs from Paraguay's SET use semicolons — detect before XLSX.read
-  var _sample;
-  try { _sample = new TextDecoder('utf-8').decode(new Uint8Array(bufM, 0, Math.min(1024, bufM.byteLength))); }
-  catch(e) { try { _sample = new TextDecoder('iso-8859-1').decode(new Uint8Array(bufM, 0, Math.min(1024, bufM.byteLength))); showToast('⚠ Archivo Marangatu: encoding no estándar detectado (ISO-8859-1). Verificar resultado.'); } catch(e2){ _sample=''; } }
-  var _firstLine = (_sample||'').split('\n')[0];
-  var _FS = _firstLine.includes(';') ? ';' : ',';
-  if(_FS === ',') showToast('⚠ Marangatu: separador coma detectado (esperado punto y coma). Verificar que el archivo sea el CSV del SET.');
-  var wbM = XLSX.read(bufM, {type:'array', raw:true, FS:_FS});
-  var sh  = wbM.Sheets[wbM.SheetNames[0]];
-  var dataM = XLSX.utils.sheet_to_json(sh, {header:1, defval:''});
-
-  // Dynamic column detection: pick the row with the MOST keyword matches
-  // (avoids triggering on metadata rows like "RUC del Contribuyente: XXXXX")
-  var hM=0;
-  var cMRuc=-1, cMNom=-1, cMFecha=-1, cMTipo=-1, cMNro=-1, cMTimb=-1;
-  var cMGrav5=-1, cMGrav10=-1, cMExenta=-1, cMIva5=-1, cMIva10=-1, cMTotal=-1;
-  var _bestHits=0;
-  for(var i=0;i<Math.min(10,dataM.length);i++){
-    var _hr=dataM[i].map(function(h){ return String(h||'').toLowerCase().trim(); });
-    var _cnt=_hr.filter(function(h){
-      return h&&(h.includes('ruc')||h.includes('comprobante')||h.includes('fecha')||
-        h.includes('timbrado')||h.includes('grav')||h.includes('iva')||
-        h.includes('nombre')||h.includes('razon')||h.includes('tipo')||
-        h.includes('exenta')||h==='total'||h.includes('nro')||h.includes('número'));
-    }).length;
-    if(_cnt>_bestHits){ _bestHits=_cnt; hM=i; }
-  }
-  if(_bestHits>=3){
-    var hrow=dataM[hM].map(function(h){ return String(h||'').toLowerCase().trim(); });
-    hrow.forEach(function(h,j){
-      // "Número de Identificación del Vendedor" → RUC; also plain 'ruc'
-      if((h.includes('ruc')||(h.includes('identificaci')&&!h.includes('comprobante')))&&cMRuc<0) cMRuc=j;
-      else if((h.includes('nombre')||h.includes('razon')||h.includes('razón'))&&cMNom<0) cMNom=j;
-      else if(h.includes('fecha')&&cMFecha<0) cMFecha=j;
-      else if(h.includes('tipo')&&cMTipo<0) cMTipo=j;
-      else if(h.includes('timbrado')&&cMTimb<0) cMTimb=j;
-      // "Número de Comprobante" (col 5) — skip CDC "Identificador" and vendor RUC "Identificación"
-      else if(!h.includes('identificador')&&!h.includes('identificaci')&&(h.includes('comprobante')||h.includes('número')||h.includes('numero')||h.includes('nro'))&&cMNro<0) cMNro=j;
-      else if(h.includes('grav')&&h.includes('5')&&cMGrav5<0) cMGrav5=j;
-      else if(h.includes('grav')&&h.includes('10')&&cMGrav10<0) cMGrav10=j;
-      else if((h.includes('exenta')||h.includes('exento'))&&cMExenta<0) cMExenta=j;
-      else if(h.includes('iva')&&h.includes('5')&&cMIva5<0) cMIva5=j;
-      else if(h.includes('iva')&&h.includes('10')&&cMIva10<0) cMIva10=j;
-      // "Monto Total del Comprobante" — match by substring, not exact
-      else if((h.includes('monto')&&h.includes('total')||h==='total')&&cMTotal<0) cMTotal=j;
-    });
-  }
-  // Fallback positions (typical Marangatu COMPRAS layout)
-  if(cMRuc<0)   cMRuc=1;   if(cMNom<0)   cMNom=2;
-  if(cMFecha<0) cMFecha=3; if(cMTipo<0)  cMTipo=4;
-  if(cMNro<0)   cMNro=5;   if(cMTimb<0)  cMTimb=6;
-  if(cMGrav5<0) cMGrav5=7; if(cMGrav10<0)cMGrav10=8;
-  if(cMExenta<0)cMExenta=9;if(cMIva5<0)  cMIva5=10;
-  if(cMIva10<0) cMIva10=11;if(cMTotal<0) cMTotal=7;
-
-  var cntMTotal=0, cntMNoFact=0, cntMCorte=0, cntMDup=0;
-  for(var r=hM+1;r<dataM.length;r++){
-    var row=dataM[r];
-    if(row.every(function(c){ return !c; })) continue; // skip blank rows
-    cntMTotal++;
-    // Only process facturas — skip notas de crédito, débito, autofacturas, etc.
-    var tipo=String(row[cMTipo]||'').trim().toLowerCase();
-    if(tipo&&!tipo.startsWith('factura')){ cntMNoFact++; continue; }
-    var fechaM=excelDateToStr(row[cMFecha]);
-    if(corteVal&&fechaM&&fechaM>corteVal){ cntMCorte++; continue; }
-    var ruc=normRuc(String(row[cMRuc]||'').trim());
-    var nro=String(row[cMNro]||'').trim();
-    if(!ruc||!nro) continue;
-    var key=normNro(nro)+'_'+ruc;
-    if(mapM[key]){ cntMDup++; continue; }
-    // Monto: use explicit total col if present; otherwise sum all components
-    var g5=num(row[cMGrav5]),g10=num(row[cMGrav10]),ex=num(row[cMExenta]);
-    var i5=num(row[cMIva5]),i10=num(row[cMIva10]);
-    var tot=num(row[cMTotal]);
-    var monto = tot>0 ? tot : g5+i5+g10+i10+ex;
-    mapM[key]={
-      ruc:ruc, nombre:String(row[cMNom]||'').trim(),
-      fecha:fechaM,
-      tipo:String(row[cMTipo]||'FACTURA').trim(),
-      nro:normNro(nro), nroRaw:nro,
-      timbrado:String(row[cMTimb]||'').trim(),
-      monto:monto
-    };
-  }
-
-  // ── 2. Parsear Libro de Compras (XLS/XLSX) ──
-  var mapL = {};
-  var wbL = XLSX.read(bufL, {type:'array', raw:true});
-  // Prefer sheet named 'econt' or 'compras'; else first sheet
-  var shName = wbL.SheetNames[0];
-  wbL.SheetNames.forEach(function(n){ if(/econt|compra/i.test(n)) shName=n; });
-  var shL = wbL.Sheets[shName];
-  var dataL = XLSX.utils.sheet_to_json(shL, {header:1, defval:''});
-
-  // Detect column positions from header row
-  var hL=-1, cNomcom=-1, cNro=-1, cFecha=-1, cGrav5=-1, cGrav10=-1, cExenta=-1;
-  var cIva5=-1, cIva10=-1, cNomcli=-1, cProv=-1, cTimb=-1;
-  for(var i=0;i<Math.min(5,dataL.length);i++){
-    var hrow=dataL[i].map(function(h){ return String(h||'').toLowerCase().trim(); });
-    // Detect: libro has 'nomcom' or 'nrocomp' or 'proveedor'
-    if(hrow.some(function(h){ return h==='nomcom'||h==='nrocomp'||h==='proveedor'; })){
-      hL=i;
-      hrow.forEach(function(h,j){
-        if(h==='nomcom'||h.includes('tipo')) cNomcom=j;
-        else if(h==='nrocomp'||h==='numero'||h==='número'||(h.includes('nro')&&h.includes('comp'))) cNro=j;
-        else if(h.includes('fecha')&&cFecha<0) cFecha=j;
-        else if(h==='gravada5'||h==='grav5') cGrav5=j;
-        else if(h==='gravada10'||h==='grav10') cGrav10=j;
-        else if(h==='exenta'||h==='exento') cExenta=j;
-        else if(h==='iva5') cIva5=j;
-        else if(h==='iva10') cIva10=j;
-        else if(h==='nomcli'||h.includes('razón')||h.includes('razon')) cNomcli=j;
-        else if((h==='ruc'||h==='proveedor')&&cProv<0) cProv=j;
-        else if(h.includes('timbrado')) cTimb=j;
-      });
-      break;
-    }
-  }
-  // Fallback: FoxPro librocompra layout (nomcom=0,nrocomp=1,fechastock=2,gravada5=3,gravada10=4,exenta=5,nomcli=6,proveedor=7,...,timbrado=12)
-  if(hL<0){ hL=0; cNomcom=0;cNro=1;cFecha=2;cGrav5=3;cGrav10=4;cExenta=5;cNomcli=6;cProv=7;cTimb=12; }
-
-  for(var r=hL+1;r<dataL.length;r++){
-    var row=dataL[r];
-    var fechaL=excelDateToStr(cFecha>=0?row[cFecha]:'');
-    if(corteVal&&fechaL&&fechaL>corteVal) continue;
-    var nro=String(row[cNro>=0?cNro:1]||'').trim();
-    var prov=normRuc(String(row[cProv>=0?cProv:3]||'').trim());
-    if(!nro||!prov||nro==='0') continue;
-    var grav5=num(row[cGrav5>=0?cGrav5:4]);
-    var grav10=num(row[cGrav10>=0?cGrav10:5]);
-    var exenta=num(row[cExenta>=0?cExenta:6]);
-    var iva5=cIva5>=0?num(row[cIva5]):Math.round(grav5*0.05);
-    var iva10=cIva10>=0?num(row[cIva10]):Math.round(grav10*0.10);
-    var total=grav5+iva5+grav10+iva10+exenta;
-    var key=normNro(nro)+'_'+prov;
-    if(mapL[key]) continue; // keep first occurrence, consistent with mapM
-    mapL[key]={
-      tipo:String(row[cNomcom>=0?cNomcom:0]||'FACTURA').trim(),
-      nro:normNro(nro), nroRaw:nro,
-      prov:prov,
-      nomcli:String(row[cNomcli>=0?cNomcli:7]||'').trim(),
-      total:total,
-      grav5:grav5, grav10:grav10, exenta:exenta,
-      timb:String(row[cTimb>=0?cTimb:10]||'').trim(),
-      fecha:fechaL
-    };
-  }
-
-  // ── 3. Cruce ──
-  var rows=[];
-  var matchedL={};
-
-  // Marangatu entries
-  Object.keys(mapM).forEach(function(key){
-    var m=mapM[key]; var l=mapL[key];
-    var iS=l?l.total:null;
-    var diff=iS!==null?m.monto-iS:m.monto;
-    var sinCruz=iS===null;
-    var causa='';
-    if(sinCruz) causa='Comprobante en Marangatu sin registro en Libro';
-    else if(Math.abs(diff)>0.5) causa='Diferencia de importe (Gs. '+fmt(Math.abs(diff))+')';
-    if(l) matchedL[key]=true;
-    rows.push({
-      sistema:'compras', fecha:m.fecha, trx:m.nro, nroRaw:m.nroRaw,
-      cliente:m.nombre, ruc:m.ruc, factura:m.timbrado,
-      impPortal:m.monto, impSys:iS, diff:diff,
-      sinCruz:sinCruz, estado:m.tipo, causa:causa
-    });
-  });
-
-  // Libro entries NOT in Marangatu
-  Object.keys(mapL).forEach(function(key){
-    if(matchedL[key]) return;
-    var l=mapL[key];
-    rows.push({
-      sistema:'compras', fecha:l.fecha, trx:l.nro, nroRaw:l.nroRaw,
-      cliente:l.nomcli, ruc:l.prov, factura:l.timb,
-      impPortal:null, impSys:l.total, diff:-l.total,
-      sinCruz:false, estado:l.tipo, causa:'Comprobante en Libro sin registro en Marangatu'
-    });
-  });
-
-  // Attach parse stats so the export can show them
-  rows._stats = {
-    maranTotal: cntMTotal,
-    maranNoFact: cntMNoFact,
-    maranCorte: cntMCorte,
-    maranDup: cntMDup,
-    maranProcesadas: Object.keys(mapM).length,
-    libroTotal: Object.keys(mapL).length + Object.keys(matchedL).length,
-    libroProcesadas: Object.keys(mapL).length + Object.keys(matchedL).length
-  };
-  return rows;
-}
-// ══ EJECUCIÓN CONCILIADORA MULTIPRESERVADA ══
-function runConcil(){
-  var today = new Date().toLocaleDateString('es-PY', {day: '2-digit', month: '2-digit', year: 'numeric'});
-  // Reset session snapshot so goTo('dash') below doesn't render stale data from a previous run
+async function runConcil(){
+  var today = new Date().toLocaleDateString('es-PY', {day:'2-digit', month:'2-digit', year:'numeric'});
+  var corteVal = document.getElementById('fecha-corte').value;
   ST.sessionRows = [];
   ST.viewRows = null;
   goTo('dash', document.querySelectorAll('.sb-item')[2]);
   document.getElementById('dash-prog').style.display = 'block';
   document.getElementById('dash-content').style.display = 'none';
-  
+
   var setP = function(p, msg){
-    document.getElementById('prog-fill').style.width = p + '%';
+    document.getElementById('prog-fill').style.width = p+'%';
     document.getElementById('prog-sub').textContent = msg.toUpperCase();
   };
-  
-  setTimeout(function(){
-    setP(15, 'Estructurando memorias contables...');
-    setTimeout(function(){
-      
-      // Si no es demo y tenemos buffers reales, procesar. Si es demo, ya inyectó filas directamente.
-      if (ST.files.ip !== true) {
-        ST.rows = [];
-        try {
-          if(ST.files.ip && ST.files.is){
-            setP(35, 'Inyectando canal Infonet...');
-            var ri = concilInfornet(ST.files.ip, ST.files.is);
-            ST.rows.push.apply(ST.rows, ri);
-          }
-          if(ST.files.np && ST.files.ns){
-            setP(60, 'Sincronizando canal Netel...');
-            var rn = concilNetel(ST.files.np, ST.files.ns);
-            ST.rows.push.apply(ST.rows, rn);
-          }
-          if(ST.files.pp && ST.files.ps){
-            setP(80, 'Procesando canal Pronet...');
-            var rp = concilPronet(ST.files.pp, ST.files.ps);
-            ST.rows.push.apply(ST.rows, rp);
-          }
-          if(ST.files.mp && ST.files.ls){
-            setP(88, 'Conciliando Libro de Compras vs Marangatu...');
-            var rc = concilCompras(ST.files.mp, ST.files.ls);
-            ST.rows.push.apply(ST.rows, rc);
-            ST.comprasStats = rc._stats || null;
-          }
-        } catch(err) {
-          customAlert('Fallo del Motor de Cruce', 'Error al leer archivos reales: ' + err.message);
-          document.getElementById('dash-prog').style.display = 'none';
-          return;
-        }
-      }
-      
-      setP(95, 'Archivando histórico corporativo...');
-      // Filter rows up to and including the corte date (cumulative: all transactions through cutoff)
-      var corteVal = document.getElementById('fecha-corte').value; // YYYY-MM-DD
-      if(corteVal){
-        ST.rows = ST.rows.filter(function(r){ return !r.fecha || fechaToISO(r.fecha) <= corteVal; });
-      }
-      // History key = the corte date (not the run date), so each cutoff accumulates independently
-      var corteDate = today;
-      if(corteVal){
-        var _cd = new Date(corteVal + 'T12:00:00');
-        corteDate = _cd.toLocaleDateString('es-PY', {day:'2-digit', month:'2-digit', year:'numeric'});
-      }
-      var idx = ST.history.findIndex(function(h){ return h.date === corteDate; });
-      var entry = {date: corteDate, ts: Date.now(), rows: ST.rows};
-      if(idx >= 0) { entry.cloud_id = ST.history[idx].cloud_id; ST.history[idx] = entry; }
-      else ST.history.unshift(entry);
-      ST.history.sort(function(a,b){ return b.ts - a.ts; });
-      saveHist();
-      guardarSesionNube(entry); // sync a Railway en segundo plano
-      
-      ST.sessionRows = ST.rows.slice(); // snapshot de esta sesión — nunca se pisa con viewDay
-      setP(100, 'Motor sincronizado de manera exitosa');
-      setTimeout(function(){
-        document.getElementById('dash-prog').style.display = 'none';
-        document.getElementById('dash-content').style.display = 'block';
-        renderDash(ST.sessionRows);
-        ST.filtered = ST.rows;
-        renderTbl();
-        init3DTilt(); // Aplica 3D tilt a las nuevas tarjetas
-        showToast('✓ Registros analizados y procesados correctamente');
-      }, 500);
-    }, 250);
-  }, 100);
-}
 
+  setP(15, 'Estructurando memorias contables...');
+
+  if (ST.files.ip !== true) {
+    ST.rows = [];
+    var token = localStorage.getItem('token');
+    var canales = [
+      {key:'infonet', p:ST.files.ip, s:ST.files.is, pct:35, msg:'Inyectando canal Infonet...'},
+      {key:'netel',   p:ST.files.np, s:ST.files.ns, pct:60, msg:'Sincronizando canal Netel...'},
+      {key:'pronet',  p:ST.files.pp, s:ST.files.ps, pct:80, msg:'Procesando canal Pronet...'},
+      {key:'compras', p:ST.files.mp, s:ST.files.ls, pct:88, msg:'Conciliando Libro de Compras vs Marangatu...'},
+    ];
+    try {
+      for (var i = 0; i < canales.length; i++) {
+        var c = canales[i];
+        if (!c.p || !c.s) continue;
+        setP(c.pct, c.msg);
+        var fd = new FormData();
+        fd.append('canal', c.key);
+        fd.append('portal_file', new Blob([c.p]), 'portal');
+        fd.append('sys_file', new Blob([c.s]), 'sistema');
+        if (corteVal) fd.append('fecha_corte', corteVal);
+        var resp = await fetch('/v1/reconcile', {
+          method: 'POST',
+          headers: {'Authorization': 'Bearer ' + token},
+          body: fd
+        });
+        if (!resp.ok) {
+          var errText = await resp.text();
+          throw new Error('Canal ' + c.key + ': ' + errText);
+        }
+        var rows = await resp.json();
+        ST.rows.push.apply(ST.rows, rows);
+      }
+    } catch(err) {
+      customAlert('Fallo del Motor de Cruce', err.message);
+      document.getElementById('dash-prog').style.display = 'none';
+      return;
+    }
+  }
+
+  setP(95, 'Archivando histórico corporativo...');
+  if(corteVal){
+    ST.rows = ST.rows.filter(function(r){ return !r.fecha || fechaToISO(r.fecha) <= corteVal; });
+  }
+  var corteDate = today;
+  if(corteVal){
+    var _cd = new Date(corteVal + 'T12:00:00');
+    corteDate = _cd.toLocaleDateString('es-PY', {day:'2-digit', month:'2-digit', year:'numeric'});
+  }
+  var idx = ST.history.findIndex(function(h){ return h.date === corteDate; });
+  var entry = {date: corteDate, ts: Date.now(), rows: ST.rows};
+  if(idx >= 0) { entry.cloud_id = ST.history[idx].cloud_id; ST.history[idx] = entry; }
+  else ST.history.unshift(entry);
+  ST.history.sort(function(a,b){ return b.ts - a.ts; });
+  saveHist();
+  guardarSesionNube(entry);
+
+  ST.sessionRows = ST.rows.slice();
+  setP(100, 'Motor sincronizado de manera exitosa');
+  setTimeout(function(){
+    document.getElementById('dash-prog').style.display = 'none';
+    document.getElementById('dash-content').style.display = 'block';
+    renderDash(ST.sessionRows);
+    ST.filtered = ST.rows;
+    renderTbl();
+    init3DTilt();
+    showToast('✓ Registros analizados y procesados correctamente');
+  }, 500);
+}
 // ══ RENDERIZADO DEL HISTORIAL EJECUTIVO ══
 function renderHist(){
   var list = document.getElementById('days-list'), sumEl = document.getElementById('hist-sum');

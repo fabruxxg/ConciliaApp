@@ -5,7 +5,7 @@ import json
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import pandas as pd
 from fastapi import FastAPI, Depends, HTTPException, status, Form, File, UploadFile, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +16,7 @@ from database import init_db, engine, get_session
 from models import User, ReconciliationHistory, Candidate
 from sqlmodel import Session, select
 import os
+from reconciliation import concil_infornet, concil_netel, concil_pronet, concil_compras
 
 app = FastAPI()
 
@@ -355,7 +356,45 @@ async def eliminar_historial(entry_id: int, current_user: User = Depends(get_cur
 
 
 # ═════════════════════════════════════════════════════════════════════
-# 5. RECLUTAMIENTO
+# 5. CONCILIACIÓN SERVER-SIDE (motores Python protegidos)
+# ═════════════════════════════════════════════════════════════════════
+
+@app.post("/v1/reconcile")
+async def reconcile(
+    canal: str = Form(...),
+    portal_file: UploadFile = File(...),
+    sys_file: UploadFile = File(...),
+    fecha_corte: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ejecuta el motor de conciliación server-side para el canal indicado.
+    canal: "infonet" | "netel" | "pronet" | "compras"
+    """
+    portal_bytes = await portal_file.read()
+    sys_bytes = await sys_file.read()
+
+    try:
+        if canal == "infonet":
+            rows = concil_infornet(portal_bytes, sys_bytes)
+        elif canal == "netel":
+            rows = concil_netel(portal_bytes, sys_bytes)
+        elif canal == "pronet":
+            rows = concil_pronet(portal_bytes, sys_bytes)
+        elif canal == "compras":
+            rows = concil_compras(portal_bytes, sys_bytes, fecha_corte)
+        else:
+            raise HTTPException(status_code=400, detail=f"Canal desconocido: {canal}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en conciliación {canal}: {str(e)}")
+
+    return rows
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 6. RECLUTAMIENTO
 # ═════════════════════════════════════════════════════════════════════
 
 def _check_bot(request: Request):
