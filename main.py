@@ -349,7 +349,8 @@ async def servir_dashboard():
         print(f"[CLERK] Inyectando key: {CLERK_PUBLISHABLE_KEY[:20]}...")
         clerk_script = (
             f'<script>window.clerkPublishableKey = "{CLERK_PUBLISHABLE_KEY}"; window.CLERK_PK = "{CLERK_PUBLISHABLE_KEY}";</script>\n'
-            f'<script src="https://unpkg.com/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>'
+            f'<script async src="https://unpkg.com/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>\n'
+            f'<script>document.addEventListener("DOMContentLoaded", function(){{ if(window.Clerk) initClerk(); }});</script>'
         )
     else:
         print("[CLERK] CLERK_PUBLISHABLE_KEY no seteada")
