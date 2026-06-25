@@ -2768,7 +2768,8 @@ function sortTbl(col){
 }
 function setF(f, btn){ AF = f; document.querySelectorAll('#scr-tbl .pill').forEach(function(p){ p.classList.remove('on'); }); btn.classList.add('on'); ST.page = 1; renderTbl(); }
 function renderTbl(){
-  var rows = [].concat(ST.filtered.length ? ST.filtered : ST.rows); var q = (document.getElementById('srch')?.value || '').toLowerCase();
+  var source = ST.viewRows || ST.rows;
+  var rows = [].concat(source); var q = (document.getElementById('srch')?.value || '').toLowerCase();
   
   // Logica de filtros ampliada
   if(AF === 'diff') rows = rows.filter(function(r){ return Math.abs(r.diff) > 0.5; });
