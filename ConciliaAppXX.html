@@ -2910,12 +2910,12 @@ function exportStyledXls(rows, title, filename, extraHeader){
 
   var rowsHtml = rows.map(function(r,i){
     var bg = rowCls(r,i);
+    var isC = r.sistema === 'compras';
     var facs = (r.facturas&&r.facturas.length)?r.facturas.join(', '):(r.factura||'—');
-    var fdif = (r.facturasDif&&r.facturasDif.length)?r.facturasDif.join(', '):'';
     var diffAmt = Math.abs(r.diff||0);
     var diffCell = diffAmt<=0.5
       ? '<span style="color:#15803d;font-weight:600">✓</span>'
-      : '<span style="color:#dc2626;font-weight:700">'+(r.diff>0?'+':''+'−')+'Gs. '+fmt(diffAmt)+'</span>';
+      : '<span style="color:#dc2626;font-weight:700">'+(r.diff>0?'+':'−')+'Gs. '+fmt(diffAmt)+'</span>';
     var portalStr = r.impPortal!=null?'Gs. '+fmt(r.impPortal):'—';
     var sysStr    = r.impSys!=null?'Gs. '+fmt(r.impSys):'—';
     var sysStyle  = sysC[r.sistema]||'#f1f5f9;color:#475569';
@@ -2924,6 +2924,13 @@ function exportStyledXls(rows, title, filename, extraHeader){
     var baseStyle = 'background:'+bg+';padding:7px 11px;border:1px solid #e2d5cb;vertical-align:middle;font-size:9.5pt;';
     var monoStyle = baseStyle+'font-family:Courier New,monospace;';
     var rStyle    = baseStyle+'text-align:right;font-family:Courier New,monospace;';
+    var obsText = isC ? '—'
+      : r.sinCruz ? 'No encontrado en sistema'
+      : diffAmt<=0.5 ? '—'
+      : ((r.facturasDif&&r.facturasDif.length) ? r.facturasDif.join(', ')
+        : (r.facturas&&r.facturas.length) ? r.facturas.join(', ')
+        : 'Desvío · ver trx. '+r.trx);
+    var obsColor = r.sinCruz?'color:#dc2626;font-weight:600;':diffAmt>0.5?'color:#b45309;':'color:#846f63;';
     return '<tr>'+
       '<td style="'+baseStyle+'">'+sysTag+'</td>'+
       '<td style="'+monoStyle+'">'+escH(r.fecha||'')+'</td>'+
@@ -2935,7 +2942,7 @@ function exportStyledXls(rows, title, filename, extraHeader){
       '<td style="'+rStyle+'">'+sysStr+'</td>'+
       '<td style="'+rStyle+'">'+diffCell+'</td>'+
       '<td style="'+baseStyle+'">'+escH(r.estado||'—')+scTag+'</td>'+
-      '<td style="'+baseStyle+'font-size:8pt;color:#846f63">'+escH(r.causa||fdif||'')+'</td>'+
+      '<td style="'+baseStyle+'font-size:8pt;'+obsColor+'">'+escH(obsText)+'</td>'+
     '</tr>';
   }).join('');
 
