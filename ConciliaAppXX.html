@@ -2574,7 +2574,7 @@ function renderHist(){
   setTimeout(init3DTilt, 50); // Reactivar tilt para históricos renderizados
 }
 function toggleDay(i){ var b = document.getElementById('body-'+i); var a = document.getElementById('arr-'+i); var o = b.classList.toggle('open'); if(a) a.classList.toggle('open',o); }
-function viewDay(i){ ST.viewRows = ST.history[i].rows; ST.filtered = ST.viewRows; goTo('tbl', document.querySelectorAll('.sb-item')[3]); }
+function viewDay(i){ ST.viewRows = ST.history[i].rows; ST.filtered = ST.viewRows; goTo('tbl', document.querySelectorAll('.sb-item')[3]); renderTbl(); }
 function exportDay(i){
   var h=ST.history[i];
   var hasC=h.rows.some(function(r){return r.sistema==='compras';});
