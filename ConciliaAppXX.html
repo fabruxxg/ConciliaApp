@@ -2213,7 +2213,7 @@ function goTo(name, el){
       if(de) de.style.display = 'flex';
     }
   }
-  if(name === 'tbl'){ ST.filtered = ST.viewRows || ST.rows; renderTbl(); }
+  if(name === 'tbl'){ if(!ST.filtered.length) ST.filtered = ST.viewRows || ST.rows; renderTbl(); }
   if(name === 'recruit'){ loadRecruit(); botPoll(); botPollStart(false); }
   else { if(BOT.pollTimer){ clearInterval(BOT.pollTimer); BOT.pollTimer=null; } }
 }
