@@ -3131,47 +3131,47 @@ function exportComprasXlsx(rows, filename){
 
   // ── Styles ──
   var styles = '<Styles>'+
-    '<Style ss:ID="ttl"><Font ss:Name="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#f97316"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="sub"><Font ss:Name="Calibri" ss:Size="9" ss:Color="#6b7280"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="lbl"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#d1d5db"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="val"><Font ss:Name="Calibri" ss:Color="#f5f0eb"/><Interior ss:Color="#292524" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="valN"><Font ss:Name="Calibri" ss:Color="#f5f0eb"/><Interior ss:Color="#292524" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="mF"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fca5a5"/><Interior ss:Color="#7f1d1d" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="mFN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fca5a5"/><Interior ss:Color="#7f1d1d" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="mD"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fdba74"/><Interior ss:Color="#431407" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="mDN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fdba74"/><Interior ss:Color="#431407" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="mS"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#c7d2fe"/><Interior ss:Color="#1e1b4b" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="mSN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#c7d2fe"/><Interior ss:Color="#1e1b4b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="mC"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#6ee7b7"/><Interior ss:Color="#064e3b" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="mCN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#6ee7b7"/><Interior ss:Color="#064e3b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="hF"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#dc2626" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dF"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#2d0a0a" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dFB"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#3b0e0e" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dFN"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#2d0a0a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="dFBN"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#3b0e0e" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="totF"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#991b1b" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="totFN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#991b1b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="hD"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#ea580c" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dD"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#2d1505" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dDB"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#3b1a07" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dDN"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#2d1505" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="dDBN"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#3b1a07" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="totD"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#9a3412" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="totDN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#9a3412" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="hS"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#6366f1" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dS"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#0f0d2a" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dSB"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#17143a" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dSN"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#0f0d2a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="dSBN"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#17143a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="totS"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#4338ca" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="totSN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#4338ca" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="hC"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#059669" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dC"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#052e1c" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dCB"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#063d22" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="dCN"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#052e1c" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="dCBN"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#063d22" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
-    '<Style ss:ID="totC"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#047857" ss:Pattern="Solid"/></Style>'+
-    '<Style ss:ID="totCN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#047857" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="ttl"><Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#f97316"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="sub"><Font ss:FontName="Calibri" ss:Size="9" ss:Color="#6b7280"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="lbl"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#d1d5db"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="val"><Font ss:FontName="Calibri" ss:Color="#f5f0eb"/><Interior ss:Color="#292524" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="valN"><Font ss:FontName="Calibri" ss:Color="#f5f0eb"/><Interior ss:Color="#292524" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mF"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#fca5a5"/><Interior ss:Color="#7f1d1d" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mFN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#fca5a5"/><Interior ss:Color="#7f1d1d" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mD"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#fdba74"/><Interior ss:Color="#431407" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mDN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#fdba74"/><Interior ss:Color="#431407" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mS"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#c7d2fe"/><Interior ss:Color="#1e1b4b" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mSN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#c7d2fe"/><Interior ss:Color="#1e1b4b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mC"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#6ee7b7"/><Interior ss:Color="#064e3b" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mCN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#6ee7b7"/><Interior ss:Color="#064e3b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hF"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#dc2626" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dF"><Font ss:FontName="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#2d0a0a" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dFB"><Font ss:FontName="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#3b0e0e" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dFN"><Font ss:FontName="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#2d0a0a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dFBN"><Font ss:FontName="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#3b0e0e" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totF"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#991b1b" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totFN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#991b1b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hD"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#ea580c" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dD"><Font ss:FontName="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#2d1505" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dDB"><Font ss:FontName="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#3b1a07" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dDN"><Font ss:FontName="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#2d1505" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dDBN"><Font ss:FontName="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#3b1a07" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totD"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#9a3412" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totDN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#9a3412" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hS"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#6366f1" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dS"><Font ss:FontName="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#0f0d2a" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dSB"><Font ss:FontName="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#17143a" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dSN"><Font ss:FontName="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#0f0d2a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dSBN"><Font ss:FontName="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#17143a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totS"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#4338ca" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totSN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#4338ca" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hC"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#059669" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dC"><Font ss:FontName="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#052e1c" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dCB"><Font ss:FontName="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#063d22" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dCN"><Font ss:FontName="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#052e1c" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dCBN"><Font ss:FontName="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#063d22" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totC"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#047857" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totCN"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#047857" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
   '</Styles>';
 
   // ── Hoja Resumen ──
@@ -3246,7 +3246,7 @@ function exportComprasXlsx(rows, filename){
     '</Table></Worksheet>';
 
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
-    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'+
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:html="http://www.w3.org/TR/REC-html40">\n'+
     styles+'\n'+wsResumen+'\n'+wsFalt+'\n'+wsDifs+'\n'+wsSolo+'\n'+wsConc+'\n'+
     '</Workbook>';
 
