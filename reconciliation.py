@@ -444,6 +444,13 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
                     c_timb_l = j
             break
 
+    # DEBUG: mostrar primeras filas del Libro para diagnóstico
+    print(f"[COMPRAS DEBUG] Libro sheet: '{sh_name}', total filas: {len(data_l)}")
+    for dbg_i, dbg_row in enumerate(data_l[:4]):
+        print(f"[COMPRAS DEBUG] Libro fila {dbg_i}: {[str(c)[:30] for c in dbg_row[:15]]}")
+    print(f"[COMPRAS DEBUG] h_l detectado: {h_l}")
+    print(f"[COMPRAS DEBUG] cols detectadas: nro={c_nro_l} prov={c_prov} fecha={c_fecha_l} grav5={c_grav5_l} grav10={c_grav10_l} exenta={c_exenta_l}")
+
     # Fallback layout FoxPro librocompra
     if h_l < 0:
         h_l = 0
@@ -453,6 +460,8 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
     def fb(v, d): return v if v >= 0 else d
     c_nro_l = fb(c_nro_l, 1); c_prov = fb(c_prov, 3); c_grav5_l = fb(c_grav5_l, 4)
     c_grav10_l = fb(c_grav10_l, 5); c_exenta_l = fb(c_exenta_l, 6)
+
+    print(f"[COMPRAS DEBUG] cols FINALES: nro={c_nro_l} prov={c_prov} fecha={c_fecha_l} grav5={c_grav5_l} grav10={c_grav10_l}")
 
     map_l = {}
     for row in data_l[h_l + 1:]:
@@ -479,6 +488,14 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
             'timb': cell(row, c_timb_l) if c_timb_l >= 0 else '',
             'fecha': fecha_lv,
         }
+
+    print(f"[COMPRAS DEBUG] map_m: {len(map_m)} entradas, map_l: {len(map_l)} entradas")
+    if map_m:
+        sample_m = list(map_m.items())[:2]
+        print(f"[COMPRAS DEBUG] sample map_m keys: {[k for k,v in sample_m]}")
+    if map_l:
+        sample_l = list(map_l.items())[:2]
+        print(f"[COMPRAS DEBUG] sample map_l keys: {[k for k,v in sample_l]}")
 
     # ── 3. Cruce ──
     rows = []
