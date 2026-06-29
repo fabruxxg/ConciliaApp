@@ -329,10 +329,18 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
     c_grav5 = c_grav10 = c_exenta = c_iva5 = c_iva10 = c_total = -1
     if best_hits >= 3:
         hrow = [str(c).lower().strip() for c in data_m[h_m]]
+        print(f"[COMPRAS DEBUG] Marangatu headers: {hrow}")
+        print(f"[COMPRAS DEBUG] Marangatu fila 1: {[str(c)[:25] for c in data_m[h_m+1][:15]]}")
+        # Primer paso: buscar RUC del PROVEEDOR específicamente
+        for j, h in enumerate(hrow):
+            if ('ruc' in h or 'identificaci' in h) and ('prov' in h or 'empresa' in h or 'tercero' in h) and c_ruc < 0:
+                c_ruc = j
+        # Segundo paso: si no encontró RUC proveedor, tomar cualquier RUC (puede ser el propio)
         for j, h in enumerate(hrow):
             if ('ruc' in h or ('identificaci' in h and 'comprobante' not in h)) and c_ruc < 0:
                 c_ruc = j
-            elif ('nombre' in h or 'razon' in h or 'razón' in h) and c_nom < 0:
+        for j, h in enumerate(hrow):
+            if ('nombre' in h or 'razon' in h or 'razón' in h) and c_nom < 0:
                 c_nom = j
             elif 'fecha' in h and c_fecha < 0:
                 c_fecha = j
