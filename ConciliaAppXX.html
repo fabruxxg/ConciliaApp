@@ -3115,120 +3115,148 @@ function exportComprasXlsx(rows, filename){
   var conc = cr.filter(function(r){ return !r.sinCruz && r.impPortal!==null && Math.abs(r.diff||0)<=0.5; });
   var difs = cr.filter(function(r){ return !r.sinCruz && r.impPortal!==null && Math.abs(r.diff||0)>0.5; });
   var solo = cr.filter(function(r){ return r.impPortal===null; });
-  var corte = (document.getElementById('fecha-corte')||{}).value || '—';
-  var dateStr = new Date().toLocaleDateString('es-PY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  var corte = (document.getElementById('fecha-corte')||{}).value || 'Sin filtro';
+  var dateStr = new Date().toLocaleDateString('es-PY');
 
-  var totalMaran = falt.reduce(function(a,r){ return a+(r.impPortal||0); },0)
-                 + conc.reduce(function(a,r){ return a+(r.impPortal||0); },0)
-                 + difs.reduce(function(a,r){ return a+(r.impPortal||0); },0);
-  var totalDif   = difs.reduce(function(a,r){ return a+Math.abs(r.diff||0); },0);
-  var totalFalt  = falt.reduce(function(a,r){ return a+(r.impPortal||0); },0);
+  var tF = falt.reduce(function(a,r){ return a+(r.impPortal||0); },0);
+  var tC = conc.reduce(function(a,r){ return a+(r.impPortal||0); },0);
+  var tD = difs.reduce(function(a,r){ return a+Math.abs(r.diff||0); },0);
+  var tS = solo.reduce(function(a,r){ return a+(r.impSys||0); },0);
+  var tM = tF + tC + difs.reduce(function(a,r){ return a+(r.impPortal||0); },0);
 
-  function gs(v){ return 'Gs. '+fmt(v); }
+  function e(s){ return String(s===null||s===undefined?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function sc(v,s){ return '<Cell ss:StyleID="'+s+'"><Data ss:Type="String">'+e(v)+'</Data></Cell>'; }
+  function nc(v,s){ return '<Cell ss:StyleID="'+s+'"><Data ss:Type="Number">'+Math.round(v||0)+'</Data></Cell>'; }
+  function blank(){ return '<Row ss:Height="8"/>'; }
 
-  // ── Métricas ──
-  var metrics = [
-    { icon:'✓', label:'Conciliados',      val:fmt2(conc.length), sub:gs(conc.reduce(function(a,r){return a+(r.impPortal||0);},0)), bg:'#064e3b', accent:'#10b981', border:'#059669' },
-    { icon:'⚠', label:'Faltantes en Libro', val:fmt2(falt.length), sub:gs(totalFalt),   bg:'#450a0a', accent:'#f87171', border:'#dc2626' },
-    { icon:'≠', label:'Dif. de Monto',    val:fmt2(difs.length), sub:gs(totalDif),      bg:'#431407', accent:'#fb923c', border:'#ea580c' },
-    { icon:'○', label:'Solo en Libro',    val:fmt2(solo.length), sub:gs(solo.reduce(function(a,r){return a+(r.impSys||0);},0)), bg:'#1e1b4b', accent:'#818cf8', border:'#6366f1' },
-  ];
+  // ── Styles ──
+  var styles = '<Styles>'+
+    '<Style ss:ID="ttl"><Font ss:Name="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#f97316"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="sub"><Font ss:Name="Calibri" ss:Size="9" ss:Color="#6b7280"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="lbl"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#d1d5db"/><Interior ss:Color="#1c1917" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="val"><Font ss:Name="Calibri" ss:Color="#f5f0eb"/><Interior ss:Color="#292524" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="valN"><Font ss:Name="Calibri" ss:Color="#f5f0eb"/><Interior ss:Color="#292524" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mF"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fca5a5"/><Interior ss:Color="#7f1d1d" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mFN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fca5a5"/><Interior ss:Color="#7f1d1d" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mD"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fdba74"/><Interior ss:Color="#431407" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mDN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#fdba74"/><Interior ss:Color="#431407" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mS"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#c7d2fe"/><Interior ss:Color="#1e1b4b" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mSN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#c7d2fe"/><Interior ss:Color="#1e1b4b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="mC"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#6ee7b7"/><Interior ss:Color="#064e3b" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="mCN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#6ee7b7"/><Interior ss:Color="#064e3b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hF"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#dc2626" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dF"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#2d0a0a" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dFB"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#3b0e0e" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dFN"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#2d0a0a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dFBN"><Font ss:Name="Calibri" ss:Color="#fca5a5"/><Interior ss:Color="#3b0e0e" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totF"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#991b1b" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totFN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#991b1b" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hD"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#ea580c" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dD"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#2d1505" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dDB"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#3b1a07" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dDN"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#2d1505" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dDBN"><Font ss:Name="Calibri" ss:Color="#fdba74"/><Interior ss:Color="#3b1a07" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totD"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#9a3412" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totDN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#9a3412" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hS"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#6366f1" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dS"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#0f0d2a" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dSB"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#17143a" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dSN"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#0f0d2a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dSBN"><Font ss:Name="Calibri" ss:Color="#c7d2fe"/><Interior ss:Color="#17143a" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totS"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#4338ca" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totSN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#4338ca" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="hC"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#059669" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dC"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#052e1c" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dCB"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#063d22" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="dCN"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#052e1c" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="dCBN"><Font ss:Name="Calibri" ss:Color="#6ee7b7"/><Interior ss:Color="#063d22" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+    '<Style ss:ID="totC"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#047857" ss:Pattern="Solid"/></Style>'+
+    '<Style ss:ID="totCN"><Font ss:Name="Calibri" ss:Bold="1" ss:Color="#ffffff"/><Interior ss:Color="#047857" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
+  '</Styles>';
 
-  var mHtml = metrics.map(function(m){
-    return '<td style="width:200px;padding:6px 10px 6px 0;border:none;vertical-align:top">'+
-      '<div style="background:'+m.bg+';border:1.5px solid '+m.border+';border-radius:10px;padding:16px 18px">'+
-        '<div style="font-size:22pt;color:'+m.accent+';font-weight:800;margin-bottom:2px">'+m.icon+' '+m.val+'</div>'+
-        '<div style="font-size:9pt;color:#e5e7eb;font-weight:700;letter-spacing:0.5px;margin-bottom:4px">'+m.label+'</div>'+
-        '<div style="font-size:8.5pt;color:'+m.accent+';opacity:0.85">'+m.sub+'</div>'+
-      '</div>'+
-    '</td>';
+  // ── Hoja Resumen ──
+  var wsResumen = '<Worksheet ss:Name="Resumen"><Table>'+
+    '<Column ss:Width="220"/><Column ss:Width="100"/><Column ss:Width="140"/>'+
+    '<Row>'+sc('Smart Match - Conciliacion Libro Compras vs Marangatu (SET)','ttl')+'</Row>'+
+    blank()+
+    '<Row>'+sc('Fecha de corte:','lbl')+sc(corte,'val')+'</Row>'+
+    '<Row>'+sc('Generado:','lbl')+sc(dateStr,'val')+'</Row>'+
+    blank()+
+    '<Row>'+sc('FALTANTES EN LIBRO','mF')+nc(falt.length,'mFN')+nc(tF,'mFN')+'</Row>'+
+    '<Row>'+sc('DIFERENCIAS DE MONTO','mD')+nc(difs.length,'mDN')+nc(tD,'mDN')+'</Row>'+
+    '<Row>'+sc('SOLO EN LIBRO','mS')+nc(solo.length,'mSN')+nc(tS,'mSN')+'</Row>'+
+    '<Row>'+sc('CONCILIADOS','mC')+nc(conc.length,'mCN')+nc(tC,'mCN')+'</Row>'+
+    blank()+
+    '<Row>'+sc('Total Marangatu procesadas','lbl')+nc(falt.length+conc.length+difs.length,'valN')+nc(tM,'valN')+'</Row>'+
+    '<Row>'+sc('Total Libro procesadas','lbl')+nc(conc.length+difs.length+solo.length,'valN')+'</Row>'+
+    blank()+
+    '<Row>'+sc('Produced by Shift Consulting - Smart Match','sub')+'</Row>'+
+    '</Table></Worksheet>';
+
+  // ── Hoja Faltantes en Libro ──
+  var hdrsF = ['Fecha Emision','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu'];
+  var rowsF = falt.map(function(r,i){
+    var t=i%2===0; var s=t?'dF':'dFB'; var sn=t?'dFN':'dFBN';
+    return '<Row>'+sc(r.fecha,s)+sc(r.nroRaw||r.trx,s)+sc(r.cliente,s)+sc(r.ruc,s)+sc(r.factura,s)+nc(r.impPortal||0,sn)+'</Row>';
   }).join('');
+  var wsFalt = '<Worksheet ss:Name="Faltantes en Libro"><Table>'+
+    '<Column ss:Width="100"/><Column ss:Width="130"/><Column ss:Width="200"/><Column ss:Width="100"/><Column ss:Width="80"/><Column ss:Width="140"/>'+
+    '<Row>'+hdrsF.map(function(h){ return sc(h,'hF'); }).join('')+'</Row>'+
+    rowsF+
+    '<Row>'+sc('TOTAL','totF')+sc('','totF')+sc('','totF')+sc('','totF')+sc('','totF')+nc(tF,'totFN')+'</Row>'+
+    '</Table></Worksheet>';
 
-  // ── Función para construir tabla de filas ──
-  var thS='background:#1c1917;color:#f97316;padding:9px 12px;border:1px solid #292524;font-size:9pt;font-weight:700;text-align:left;white-space:nowrap;';
-  var thR=thS+'text-align:right;';
+  // ── Hoja Diferencias de Monto ──
+  var hdrsD = ['Fecha Emision','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro','Diferencia'];
+  var rowsD = difs.map(function(r,i){
+    var t=i%2===0; var s=t?'dD':'dDB'; var sn=t?'dDN':'dDBN';
+    return '<Row>'+sc(r.fecha,s)+sc(r.nroRaw||r.trx,s)+sc(r.cliente,s)+sc(r.ruc,s)+sc(r.factura,s)+nc(r.impPortal||0,sn)+nc(r.impSys||0,sn)+nc(Math.abs(r.diff||0),sn)+'</Row>';
+  }).join('');
+  var wsDifs = difs.length ? '<Worksheet ss:Name="Dif. de Monto"><Table>'+
+    '<Column ss:Width="100"/><Column ss:Width="130"/><Column ss:Width="200"/><Column ss:Width="100"/><Column ss:Width="80"/><Column ss:Width="130"/><Column ss:Width="130"/><Column ss:Width="110"/>'+
+    '<Row>'+hdrsD.map(function(h){ return sc(h,'hD'); }).join('')+'</Row>'+
+    rowsD+
+    '<Row>'+sc('TOTAL','totD')+sc('','totD')+sc('','totD')+sc('','totD')+sc('','totD')+sc('','totD')+sc('','totD')+nc(tD,'totDN')+'</Row>'+
+    '</Table></Worksheet>' : '';
 
-  function buildSection(label, accent, bg, headerBg, dataRows, cols){
-    if(!dataRows.length) return '';
-    var thead = '<tr>'+cols.map(function(c,i){
-      return '<th style="'+(i>=cols.length-2?thR:thS)+'">'+escH(c)+'</th>';
-    }).join('')+'</tr>';
-    var rowsHtml = dataRows.map(function(r,i){
-      var rowBg = i%2===0 ? bg : shiftColor(bg,8);
-      return '<tr>'+r.map(function(cell,ci){
-        var isRight = ci >= cols.length-2;
-        var s='background:'+rowBg+';padding:7px 11px;border:1px solid #292524;font-size:9pt;vertical-align:middle;'+(isRight?'text-align:right;font-family:Courier New,monospace;':'');
-        return '<td style="'+s+'">'+escH(String(cell||'—'))+'</td>';
-      }).join('')+'</tr>';
-    }).join('');
-    return '<tr><td colspan="8" style="padding:20px 0 6px;border:none">'+
-      '<div style="background:'+headerBg+';border-left:4px solid '+accent+';padding:10px 16px;border-radius:0 6px 6px 0;display:inline-block">'+
-        '<span style="color:'+accent+';font-size:12pt;font-weight:800">'+label+'</span>'+
-        '<span style="color:#9ca3af;font-size:9pt;margin-left:12px">'+fmt2(dataRows.length)+' registros</span>'+
-      '</div>'+
-    '</td></tr>'+
-    '<tr><td colspan="8" style="padding:0;border:none">'+
-      '<table style="border-collapse:collapse;width:100%"><thead>'+thead+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
-    '</td></tr>';
-  }
-  function shiftColor(hex, pct){ return hex; } // placeholder — same bg for even/odd
+  // ── Hoja Solo en Libro ──
+  var hdrsS = ['Fecha Emision','Nro. Factura','Proveedor','RUC','Timbrado','Importe Libro'];
+  var rowsS = solo.map(function(r,i){
+    var t=i%2===0; var s=t?'dS':'dSB'; var sn=t?'dSN':'dSBN';
+    return '<Row>'+sc(r.fecha,s)+sc(r.nroRaw||r.trx,s)+sc(r.cliente,s)+sc(r.ruc,s)+sc(r.factura,s)+nc(r.impSys||0,sn)+'</Row>';
+  }).join('');
+  var wsSolo = solo.length ? '<Worksheet ss:Name="Solo en Libro"><Table>'+
+    '<Column ss:Width="100"/><Column ss:Width="130"/><Column ss:Width="200"/><Column ss:Width="100"/><Column ss:Width="80"/><Column ss:Width="140"/>'+
+    '<Row>'+hdrsS.map(function(h){ return sc(h,'hS'); }).join('')+'</Row>'+
+    rowsS+
+    '<Row>'+sc('TOTAL','totS')+sc('','totS')+sc('','totS')+sc('','totS')+sc('','totS')+nc(tS,'totSN')+'</Row>'+
+    '</Table></Worksheet>' : '';
 
-  var colsFalt = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu'];
-  var colsConc = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro'];
-  var colsDifs = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro','Diferencia'];
-  var colsSolo = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Libro'];
+  // ── Hoja Conciliados ──
+  var hdrsC = ['Fecha Emision','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro'];
+  var rowsC = conc.map(function(r,i){
+    var t=i%2===0; var s=t?'dC':'dCB'; var sn=t?'dCN':'dCBN';
+    return '<Row>'+sc(r.fecha,s)+sc(r.nroRaw||r.trx,s)+sc(r.cliente,s)+sc(r.ruc,s)+sc(r.factura,s)+nc(r.impPortal||0,sn)+nc(r.impSys||0,sn)+'</Row>';
+  }).join('');
+  var wsConc = '<Worksheet ss:Name="Conciliados"><Table>'+
+    '<Column ss:Width="100"/><Column ss:Width="130"/><Column ss:Width="200"/><Column ss:Width="100"/><Column ss:Width="80"/><Column ss:Width="130"/><Column ss:Width="130"/>'+
+    '<Row>'+hdrsC.map(function(h){ return sc(h,'hC'); }).join('')+'</Row>'+
+    rowsC+
+    '<Row>'+sc('TOTAL','totC')+sc('','totC')+sc('','totC')+sc('','totC')+sc('','totC')+nc(tC,'totCN')+nc(tC,'totCN')+'</Row>'+
+    '</Table></Worksheet>';
 
-  var secFalt = buildSection('⚠ FALTANTES EN LIBRO','#f87171','#2d0a0a','#1c0505',
-    falt.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impPortal||0)]; }), colsFalt);
-  var secDifs = buildSection('≠ DIFERENCIAS DE MONTO','#fb923c','#2d1505','#1c0a00',
-    difs.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impPortal||0),gs(r.impSys||0),'−Gs. '+fmt(Math.abs(r.diff||0))]; }), colsDifs);
-  var secSolo = buildSection('○ SOLO EN LIBRO','#818cf8','#0f0d2a','#080719',
-    solo.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impSys||0)]; }), colsSolo);
-  var secConc = buildSection('✓ CONCILIADOS','#10b981','#052e1c','#021a10',
-    conc.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impPortal||0),gs(r.impSys||0)]; }), colsConc);
+  var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'+
+    styles+'\n'+wsResumen+'\n'+wsFalt+'\n'+wsDifs+'\n'+wsSolo+'\n'+wsConc+'\n'+
+    '</Workbook>';
 
-  var html = '<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'+
-  '<head><meta charset="UTF-8"></head>'+
-  '<body style="font-family:Calibri,sans-serif;background:#0c0a09;color:#f5f0eb;padding:28px">'+
-
-  // Header
-  '<div style="border-bottom:2px solid #f97316;padding-bottom:16px;margin-bottom:22px">'+
-    '<div style="font-size:26pt;font-weight:900;color:#f97316;letter-spacing:-1px">Smart<span style="color:#fefbf9">Match</span></div>'+
-    '<div style="font-size:13pt;font-weight:700;color:#e5e7eb;margin-top:2px">CONCILIACIÓN LIBRO DE COMPRAS vs MARANGATU (SET)</div>'+
-    '<div style="font-size:9pt;color:#6b7280;margin-top:6px">'+dateStr+'&nbsp;&nbsp;·&nbsp;&nbsp;Fecha de corte: <b style="color:#d1d5db">'+escH(corte)+'</b></div>'+
-  '</div>'+
-
-  // Métricas
-  '<table style="border-collapse:separate;border-spacing:0;margin-bottom:28px"><tr>'+mHtml+'</tr></table>'+
-
-  // Resumen numérico
-  '<table style="border-collapse:collapse;margin-bottom:28px;background:#1c1917;border-radius:8px;overflow:hidden">'+
-    '<tr><td colspan="4" style="background:#292524;padding:10px 16px;font-size:10pt;font-weight:700;color:#f97316;border:none;letter-spacing:0.5px">RESUMEN FINANCIERO</td></tr>'+
-    '<tr>'+
-      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Total procesado Marangatu</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#f5f0eb;font-size:10pt">'+gs(totalMaran)+'</td>'+
-      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Importe en riesgo (faltantes)</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#f87171;font-size:10pt">'+gs(totalFalt)+'</td>'+
-    '</tr>'+
-    '<tr>'+
-      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Marangatu procesadas</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#f5f0eb;font-size:10pt">'+fmt2(falt.length+conc.length+difs.length)+'</td>'+
-      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Diferencia de importes</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#fb923c;font-size:10pt">'+gs(totalDif)+'</td>'+
-    '</tr>'+
-  '</table>'+
-
-  // Secciones de datos
-  '<table style="border-collapse:collapse;width:100%">'+
-    secFalt + secDifs + secSolo + secConc +
-  '</table>'+
-
-  '<p style="margin-top:28px;font-size:8pt;color:#44403c;border-top:1px solid #292524;padding-top:12px">Produced by Shift Consulting · Smart Match</p>'+
-  '</body></html>';
-
-  var blob = new Blob(['﻿'+html], {type:'application/vnd.ms-excel;charset=utf-8'});
+  var blob = new Blob(['﻿'+xml], {type:'application/vnd.ms-excel;charset=utf-8'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename.replace('.xlsx','.xls');
   a.click();
   URL.revokeObjectURL(a.href);
-  showToast('✓ Reporte Compras generado — '+falt.length+' faltantes · '+conc.length+' conciliados');
+  showToast('Compras exportado — '+falt.length+' faltantes · '+conc.length+' conciliados');
 }
 
 
