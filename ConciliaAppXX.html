@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ConciliaApp - Motor de Inteligencia Financiera</title>
+<title>Smart Match - Motor de Inteligencia Financiera</title>
 <!-- Tipografías unificadas: Inter para UI y JetBrains Mono para valores monetarios y transacciones -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -3640,7 +3640,7 @@ function exportBackup(){
   var blob = new Blob([json], {type: 'application/json'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'Backup_ConciliaApp3D_' + new Date().toLocaleDateString('es-PY', {day:'2-digit', month:'2-digit', year:'numeric'}).replace(/\//g,'-') + '.json';
+  a.download = 'Backup_SmartMatch_' + new Date().toLocaleDateString('es-PY', {day:'2-digit', month:'2-digit', year:'numeric'}).replace(/\//g,'-') + '.json';
   a.click(); URL.revokeObjectURL(a.href);
   showToast('✓ Archivo de respaldo exportado con éxito');
 }
@@ -3651,7 +3651,7 @@ function importBackup(input){
   reader.onload = function(e){
     try {
       var backup = JSON.parse(e.target.result);
-      if(!backup.version){ customAlert('Copia incompatible', 'El archivo cargado no coincide con el formato esperado de ConciliaApp.'); return; }
+      if(!backup.version){ customAlert('Copia incompatible', 'El archivo cargado no coincide con el formato esperado de Smart Match.'); return; }
       
       customConfirm('Restaurar Copia de Seguridad', 'Se fusionarán de forma segura los datos nuevos del respaldo con el historial de este navegador sin eliminar registros únicos anteriores. ¿Desea continuar?').then(function(confirmed) {
         if (!confirmed) return;
