@@ -38,7 +38,11 @@ def netel_id(raw: str) -> str:
 
 
 def norm_nro(n) -> str:
-    s = re.sub(r'[^0-9]', '', str(n or ''))
+    s = str(n or '').strip()
+    # Formato "XXX-XXX-XXXXXXX" → tomar solo el último segmento (secuencial)
+    if re.match(r'^\d{1,4}-\d{1,4}-\d+$', s):
+        s = s.split('-')[-1]
+    s = re.sub(r'[^0-9]', '', s)
     return s.lstrip('0') or '0'
 
 
