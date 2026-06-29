@@ -357,7 +357,7 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
     c_ruc = fb(c_ruc, 1); c_nom = fb(c_nom, 2); c_fecha = fb(c_fecha, 3)
     c_tipo = fb(c_tipo, 4); c_nro = fb(c_nro, 5); c_timb = fb(c_timb, 6)
     c_grav5 = fb(c_grav5, 7); c_grav10 = fb(c_grav10, 8); c_exenta = fb(c_exenta, 9)
-    c_iva5 = fb(c_iva5, 10); c_iva10 = fb(c_iva10, 11); c_total = fb(c_total, 7)
+    c_iva5 = fb(c_iva5, 10); c_iva10 = fb(c_iva10, 11); c_total = fb(c_total, -1)
 
     def cell(row, idx):
         try:
@@ -389,7 +389,7 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
         g5 = num(cell(row, c_grav5)); g10 = num(cell(row, c_grav10))
         ex = num(cell(row, c_exenta))
         i5 = num(cell(row, c_iva5)); i10 = num(cell(row, c_iva10))
-        tot = num(cell(row, c_total))
+        tot = num(cell(row, c_total)) if c_total >= 0 else 0
         monto = tot if tot > 0 else g5 + i5 + g10 + i10 + ex
         map_m[key] = {
             'ruc': ruc, 'nombre': cell(row, c_nom),
