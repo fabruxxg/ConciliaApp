@@ -1009,7 +1009,7 @@ async function procesarLoginFormulario(event) {
     if (errorMsg) errorMsg.style.display = 'none';
 
   try {
-    const res = await fetch("https://conciliaapp-production.up.railway.app/v1/auth/login", {
+    const res = await fetch("https://smart-match-1lgl.onrender.com/v1/auth/login", {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: email, password: pass })
@@ -2042,7 +2042,7 @@ function showToast(msg){
 
 // ══ ESTADOS GLOBALES ══
 var ST = {files: {}, rows: [], sessionRows: [], filtered: [], page: 1, perPage: 50, charts: {}, history: [], comprasStats: null};
-var API_BASE = 'https://conciliaapp-production.up.railway.app';
+var API_BASE = 'https://smart-match-1lgl.onrender.com';
 var _clerkToken = '';
 async function refreshClerkToken() {
   if (window.Clerk && window.Clerk.session) {
@@ -3760,7 +3760,7 @@ async function iniciarConciliacionSistema(fileMayor, filesGatewayList, processor
   formData.append('processor', processorName || 'bancard');
 
   try {
-    const response = await fetch('https://conciliaapp-production.up.railway.app/v1/reconciliations/process', {
+    const response = await fetch('https://smart-match-1lgl.onrender.com/v1/reconciliations/process', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` },
       body: formData
@@ -3777,7 +3777,7 @@ async function iniciarConciliacionSistema(fileMayor, filesGatewayList, processor
 
     const intervalId = setInterval(async () => {
       try {
-        const statusRes = await fetch(`https://conciliaapp-production.up.railway.app/v1/reconciliations/tasks/${taskId}`, {
+        const statusRes = await fetch(`https://smart-match-1lgl.onrender.com/v1/reconciliations/tasks/${taskId}`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${BACKEND_TOKEN}` }
         });
