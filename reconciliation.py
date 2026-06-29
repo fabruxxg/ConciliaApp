@@ -46,6 +46,22 @@ def norm_nro(n) -> str:
     return s.lstrip('0') or '0'
 
 
+def norm_nrocomp_libro(n) -> str:
+    """Libro de Compras (e-cont/FoxPro) guarda nrocomp como entero concatenado
+    sin guiones: EEE+PPP+NNNNNNN (13 dígitos). Extrae solo el secuencial (últimos 7)."""
+    s = str(n or '').strip()
+    # Si viene en formato XXX-XXX-XXXXXXX ya con guiones, usar norm_nro estándar
+    if re.match(r'^\d{1,4}-\d{1,4}-\d+$', s):
+        return norm_nro(s)
+    digits = re.sub(r'[^0-9]', '', s)
+    if not digits:
+        return '0'
+    # Pad a 13 dígitos (3 estab. + 3 punto + 7 secuencial), extraer últimos 7
+    padded = digits.zfill(13)
+    seq = padded[-7:].lstrip('0') or '0'
+    return seq
+
+
 def norm_ruc(r: str) -> str:
     s = str(r or '').strip()
     s = re.sub(r'-\d{1,2}$', '', s)
@@ -485,7 +501,7 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
         iva5 = num(cell(row, c_iva5_l)) if c_iva5_l >= 0 else round(grav5 * 0.05)
         iva10 = num(cell(row, c_iva10_l)) if c_iva10_l >= 0 else round(grav10 * 0.10)
         total = grav5 + iva5 + grav10 + iva10 + exenta
-        key = norm_nro(nro) + '_' + prov
+        key = norm_nrocomp_libro(nro) + '_' + prov
         if key in map_l:
             continue
         map_l[key] = {
@@ -504,6 +520,9 @@ def concil_compras(marangatu_bytes: bytes, libro_bytes: bytes, fecha_corte: Opti
     if map_l:
         sample_l = list(map_l.items())[:2]
         print(f"[COMPRAS DEBUG] sample map_l keys: {[k for k,v in sample_l]}")
+    # Verificar cuántos keys de Marangatu matchean con el Libro
+    matches = sum(1 for k in map_m if k in map_l)
+    print(f"[COMPRAS DEBUG] MATCHES encontrados: {matches} de {len(map_m)}")
 
     # ── 3. Cruce ──
     rows = []
