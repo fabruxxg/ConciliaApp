@@ -3110,90 +3110,125 @@ function exportXlsx(){
 }
 
 function exportComprasXlsx(rows, filename){
-  var cr=rows.filter(function(r){return r.sistema==='compras';});
-  var otros=rows.filter(function(r){return r.sistema!=='compras';});
-  var falt=cr.filter(function(r){return r.sinCruz;});
-  var conc=cr.filter(function(r){return !r.sinCruz&&r.impPortal!==null&&Math.abs(r.diff)<=0.5;});
-  var difs=cr.filter(function(r){return !r.sinCruz&&r.impPortal!==null&&Math.abs(r.diff)>0.5;});
-  var solo=cr.filter(function(r){return r.impPortal===null;});
-  var wb=XLSX.utils.book_new();
-  var corteUsado = document.getElementById('fecha-corte').value || 'Sin filtro de fecha';
+  var cr   = rows.filter(function(r){ return r.sistema==='compras'; });
+  var falt = cr.filter(function(r){ return r.sinCruz; });
+  var conc = cr.filter(function(r){ return !r.sinCruz && r.impPortal!==null && Math.abs(r.diff||0)<=0.5; });
+  var difs = cr.filter(function(r){ return !r.sinCruz && r.impPortal!==null && Math.abs(r.diff||0)>0.5; });
+  var solo = cr.filter(function(r){ return r.impPortal===null; });
+  var corte = (document.getElementById('fecha-corte')||{}).value || '—';
+  var dateStr = new Date().toLocaleDateString('es-PY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
 
-  // ── Hoja 1: Resumen ──
-  var st = ST.comprasStats;
-  var res=[
-    ['CONCILIACIÓN LIBRO DE COMPRAS vs MARANGATU (SET)'],
-    ['Fecha de Corte utilizada:', corteUsado],
-    ['Generado el:', new Date().toLocaleDateString('es-PY')],
-    [],
-    ['ORIGEN DE DATOS — MARANGATU'],
-    ['Total filas en archivo Marangatu', st ? st.maranTotal : '—'],
-    ['  Notas de crédito / otros (excluidos)', st ? st.maranNoFact : '—'],
-    ['  Facturas fuera de corte (excluidas)', st ? st.maranCorte : '—'],
-    ['  Duplicados de clave (excluidos)', st ? st.maranDup : '—'],
-    ['  FACTURAS PROCESADAS', st ? st.maranProcesadas : falt.length+conc.length+difs.length],
-    [],
-    ['RESULTADO DEL CRUCE','Cantidad','Descripción'],
-    ['Sí en Libro — montos iguales',conc.length,'Facturas que coinciden en ambos sistemas sin diferencia de monto'],
-    ['Sí en Libro — diferencia de monto',difs.length,'Facturas presentes en ambos pero con importes distintos'],
-    ['No en Libro (FALTANTES)',falt.length,'Facturas en Marangatu que NO están en el Libro de Compras'],
-    ['Solo en Libro',solo.length,'Facturas en el Libro que NO están declaradas en Marangatu'],
-    [],
-    ['Total facturas procesadas Marangatu', falt.length+conc.length+difs.length],
-    ['Total facturas procesadas Libro',     conc.length+difs.length+solo.length],
+  var totalMaran = falt.reduce(function(a,r){ return a+(r.impPortal||0); },0)
+                 + conc.reduce(function(a,r){ return a+(r.impPortal||0); },0)
+                 + difs.reduce(function(a,r){ return a+(r.impPortal||0); },0);
+  var totalDif   = difs.reduce(function(a,r){ return a+Math.abs(r.diff||0); },0);
+  var totalFalt  = falt.reduce(function(a,r){ return a+(r.impPortal||0); },0);
+
+  function gs(v){ return 'Gs. '+fmt(v); }
+
+  // ── Métricas ──
+  var metrics = [
+    { icon:'✓', label:'Conciliados',      val:fmt2(conc.length), sub:gs(conc.reduce(function(a,r){return a+(r.impPortal||0);},0)), bg:'#064e3b', accent:'#10b981', border:'#059669' },
+    { icon:'⚠', label:'Faltantes en Libro', val:fmt2(falt.length), sub:gs(totalFalt),   bg:'#450a0a', accent:'#f87171', border:'#dc2626' },
+    { icon:'≠', label:'Dif. de Monto',    val:fmt2(difs.length), sub:gs(totalDif),      bg:'#431407', accent:'#fb923c', border:'#ea580c' },
+    { icon:'○', label:'Solo en Libro',    val:fmt2(solo.length), sub:gs(solo.reduce(function(a,r){return a+(r.impSys||0);},0)), bg:'#1e1b4b', accent:'#818cf8', border:'#6366f1' },
   ];
-  var wsRes=XLSX.utils.aoa_to_sheet(res);
-  wsRes['!cols']=[{wch:38},{wch:12},{wch:55}];
-  XLSX.utils.book_append_sheet(wb,wsRes,'Resumen');
 
-  // ── Hoja 2: Faltantes en Libro (la más importante) ──
-  var hF=['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu'];
-  var wsF=XLSX.utils.aoa_to_sheet([hF].concat(falt.map(function(r){
-    return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,r.impPortal||''];
-  })));
-  wsF['!cols']=[{wch:14},{wch:20},{wch:36},{wch:14},{wch:14},{wch:18}];
-  XLSX.utils.book_append_sheet(wb,wsF,'Faltantes en Libro');
+  var mHtml = metrics.map(function(m){
+    return '<td style="width:200px;padding:6px 10px 6px 0;border:none;vertical-align:top">'+
+      '<div style="background:'+m.bg+';border:1.5px solid '+m.border+';border-radius:10px;padding:16px 18px">'+
+        '<div style="font-size:22pt;color:'+m.accent+';font-weight:800;margin-bottom:2px">'+m.icon+' '+m.val+'</div>'+
+        '<div style="font-size:9pt;color:#e5e7eb;font-weight:700;letter-spacing:0.5px;margin-bottom:4px">'+m.label+'</div>'+
+        '<div style="font-size:8.5pt;color:'+m.accent+';opacity:0.85">'+m.sub+'</div>'+
+      '</div>'+
+    '</td>';
+  }).join('');
 
-  // ── Hoja 3: Conciliados ──
-  var hC=['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro'];
-  var wsC=XLSX.utils.aoa_to_sheet([hC].concat(conc.map(function(r){
-    return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,r.impPortal,r.impSys];
-  })));
-  wsC['!cols']=[{wch:14},{wch:20},{wch:36},{wch:14},{wch:14},{wch:18},{wch:18}];
-  XLSX.utils.book_append_sheet(wb,wsC,'Conciliados');
+  // ── Función para construir tabla de filas ──
+  var thS='background:#1c1917;color:#f97316;padding:9px 12px;border:1px solid #292524;font-size:9pt;font-weight:700;text-align:left;white-space:nowrap;';
+  var thR=thS+'text-align:right;';
 
-  // ── Hoja 4: Diferencias de Monto (solo si existen) ──
-  if(difs.length){
-    var hD=['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro','Diferencia'];
-    var wsD=XLSX.utils.aoa_to_sheet([hD].concat(difs.map(function(r){
-      return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,r.impPortal,r.impSys,r.diff];
-    })));
-    wsD['!cols']=[{wch:14},{wch:20},{wch:36},{wch:14},{wch:14},{wch:18},{wch:18},{wch:14}];
-    XLSX.utils.book_append_sheet(wb,wsD,'Diferencias de Monto');
+  function buildSection(label, accent, bg, headerBg, dataRows, cols){
+    if(!dataRows.length) return '';
+    var thead = '<tr>'+cols.map(function(c,i){
+      return '<th style="'+(i>=cols.length-2?thR:thS)+'">'+escH(c)+'</th>';
+    }).join('')+'</tr>';
+    var rowsHtml = dataRows.map(function(r,i){
+      var rowBg = i%2===0 ? bg : shiftColor(bg,8);
+      return '<tr>'+r.map(function(cell,ci){
+        var isRight = ci >= cols.length-2;
+        var s='background:'+rowBg+';padding:7px 11px;border:1px solid #292524;font-size:9pt;vertical-align:middle;'+(isRight?'text-align:right;font-family:Courier New,monospace;':'');
+        return '<td style="'+s+'">'+escH(String(cell||'—'))+'</td>';
+      }).join('')+'</tr>';
+    }).join('');
+    return '<tr><td colspan="8" style="padding:20px 0 6px;border:none">'+
+      '<div style="background:'+headerBg+';border-left:4px solid '+accent+';padding:10px 16px;border-radius:0 6px 6px 0;display:inline-block">'+
+        '<span style="color:'+accent+';font-size:12pt;font-weight:800">'+label+'</span>'+
+        '<span style="color:#9ca3af;font-size:9pt;margin-left:12px">'+fmt2(dataRows.length)+' registros</span>'+
+      '</div>'+
+    '</td></tr>'+
+    '<tr><td colspan="8" style="padding:0;border:none">'+
+      '<table style="border-collapse:collapse;width:100%"><thead>'+thead+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
+    '</td></tr>';
   }
+  function shiftColor(hex, pct){ return hex; } // placeholder — same bg for even/odd
 
-  // ── Hoja 5: Solo en Libro (solo si existen) ──
-  if(solo.length){
-    var hS=['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Libro'];
-    var wsS=XLSX.utils.aoa_to_sheet([hS].concat(solo.map(function(r){
-      return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,r.impSys];
-    })));
-    wsS['!cols']=[{wch:14},{wch:20},{wch:36},{wch:14},{wch:14},{wch:18}];
-    XLSX.utils.book_append_sheet(wb,wsS,'Solo en Libro');
-  }
+  var colsFalt = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu'];
+  var colsConc = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro'];
+  var colsDifs = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Marangatu','Importe Libro','Diferencia'];
+  var colsSolo = ['Fecha Emisión','Nro. Factura','Proveedor','RUC','Timbrado','Importe Libro'];
 
-  // ── Hoja adicional: otros sistemas si los hay ──
-  if(otros.length){
-    var hO=['Sistema','Fecha','Transaccion','Cliente','RUC','Importe Portal','Importe Sistema','Diferencia','Estado'];
-    var wsO=XLSX.utils.aoa_to_sheet([hO].concat(otros.map(function(r){
-      return [r.sistema,r.fecha,r.trx,r.cliente,r.ruc,r.impPortal,r.impSys!=null?r.impSys:'',r.diff,r.estado];
-    })));
-    wsO['!cols']=[{wch:12},{wch:14},{wch:16},{wch:30},{wch:14},{wch:14},{wch:14},{wch:12},{wch:12}];
-    XLSX.utils.book_append_sheet(wb,wsO,'Otros Sistemas');
-  }
+  var secFalt = buildSection('⚠ FALTANTES EN LIBRO','#f87171','#2d0a0a','#1c0505',
+    falt.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impPortal||0)]; }), colsFalt);
+  var secDifs = buildSection('≠ DIFERENCIAS DE MONTO','#fb923c','#2d1505','#1c0a00',
+    difs.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impPortal||0),gs(r.impSys||0),'−Gs. '+fmt(Math.abs(r.diff||0))]; }), colsDifs);
+  var secSolo = buildSection('○ SOLO EN LIBRO','#818cf8','#0f0d2a','#080719',
+    solo.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impSys||0)]; }), colsSolo);
+  var secConc = buildSection('✓ CONCILIADOS','#10b981','#052e1c','#021a10',
+    conc.map(function(r){ return [r.fecha,r.nroRaw||r.trx,r.cliente,r.ruc,r.factura,gs(r.impPortal||0),gs(r.impSys||0)]; }), colsConc);
 
-  XLSX.writeFile(wb,filename);
-  showToast('✓ Excel exportado — '+falt.length+' faltantes · '+conc.length+' conciliados');
+  var html = '<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'+
+  '<head><meta charset="UTF-8"></head>'+
+  '<body style="font-family:Calibri,sans-serif;background:#0c0a09;color:#f5f0eb;padding:28px">'+
+
+  // Header
+  '<div style="border-bottom:2px solid #f97316;padding-bottom:16px;margin-bottom:22px">'+
+    '<div style="font-size:26pt;font-weight:900;color:#f97316;letter-spacing:-1px">Smart<span style="color:#fefbf9">Match</span></div>'+
+    '<div style="font-size:13pt;font-weight:700;color:#e5e7eb;margin-top:2px">CONCILIACIÓN LIBRO DE COMPRAS vs MARANGATU (SET)</div>'+
+    '<div style="font-size:9pt;color:#6b7280;margin-top:6px">'+dateStr+'&nbsp;&nbsp;·&nbsp;&nbsp;Fecha de corte: <b style="color:#d1d5db">'+escH(corte)+'</b></div>'+
+  '</div>'+
+
+  // Métricas
+  '<table style="border-collapse:separate;border-spacing:0;margin-bottom:28px"><tr>'+mHtml+'</tr></table>'+
+
+  // Resumen numérico
+  '<table style="border-collapse:collapse;margin-bottom:28px;background:#1c1917;border-radius:8px;overflow:hidden">'+
+    '<tr><td colspan="4" style="background:#292524;padding:10px 16px;font-size:10pt;font-weight:700;color:#f97316;border:none;letter-spacing:0.5px">RESUMEN FINANCIERO</td></tr>'+
+    '<tr>'+
+      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Total procesado Marangatu</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#f5f0eb;font-size:10pt">'+gs(totalMaran)+'</td>'+
+      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Importe en riesgo (faltantes)</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#f87171;font-size:10pt">'+gs(totalFalt)+'</td>'+
+    '</tr>'+
+    '<tr>'+
+      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Marangatu procesadas</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#f5f0eb;font-size:10pt">'+fmt2(falt.length+conc.length+difs.length)+'</td>'+
+      '<td style="padding:10px 20px;border:1px solid #292524;color:#9ca3af;font-size:9pt">Diferencia de importes</td><td style="padding:10px 20px;border:1px solid #292524;font-weight:700;color:#fb923c;font-size:10pt">'+gs(totalDif)+'</td>'+
+    '</tr>'+
+  '</table>'+
+
+  // Secciones de datos
+  '<table style="border-collapse:collapse;width:100%">'+
+    secFalt + secDifs + secSolo + secConc +
+  '</table>'+
+
+  '<p style="margin-top:28px;font-size:8pt;color:#44403c;border-top:1px solid #292524;padding-top:12px">Produced by Shift Consulting · Smart Match</p>'+
+  '</body></html>';
+
+  var blob = new Blob(['﻿'+html], {type:'application/vnd.ms-excel;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename.replace('.xlsx','.xls');
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('✓ Reporte Compras generado — '+falt.length+' faltantes · '+conc.length+' conciliados');
 }
 
 
