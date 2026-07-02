@@ -5303,6 +5303,7 @@ function renderProvHist(){
         '<div class="dc-body-inner">'+
           '<div class="dc-acts">'+
             '<button class="act-btn" onclick="viewPVDay('+i+')">Abrir Reporte</button>'+
+            '<button class="act-btn primary" onclick="exportActaPV('+i+')">🧾 Acta de Evidencia</button>'+
             '<button class="act-btn" onclick="exportPVDay('+i+')">Descargar XLSX</button>'+
             '<button class="act-btn danger" onclick="delPVDay('+i+')">Eliminar</button>'+
           '</div>'+
@@ -5315,6 +5316,100 @@ function renderProvHist(){
 function togglePVDay(i){var b=document.getElementById('pv-body-'+i);var a=document.getElementById('pv-arr-'+i);var o=b.classList.toggle('open');if(a)a.classList.toggle('open',o);}
 function viewPVDay(i){PV.results=PV_HIST[i].results;PV.filtered=PV_HIST[i].results;PV.page=1;document.getElementById('pv-legend').classList.add('show');document.getElementById('pv-table-wrap').style.display='block';renderProvTbl();window.scrollTo({top:0,behavior:'smooth'});}
 function exportPVDay(i){var saved=PV.filtered;PV.filtered=PV_HIST[i].results;exportProvXlsx();PV.filtered=saved;}
+
+// ══ ACTA DE CONCILIACIÓN — EVIDENCIA FORMAL POR EJECUCIÓN ══
+function exportActaPV(i){
+  var h=PV_HIST[i]; if(!h) return;
+  var rows=h.results||[];
+  var nroActa=h.cloudId?('CP-'+String(h.cloudId).padStart(5,'0')):('LOC-'+String(h.ts).slice(-6));
+  var provs=(h.proveedores&&h.proveedores.length)?h.proveedores.join(', '):'(sin identificar)';
+  var ok=rows.filter(function(r){return r.estado==='ok';}).length;
+  var tolN=rows.filter(function(r){return r.estado==='tol';}).length;
+  var diffM=rows.filter(function(r){return r.estado==='diff_monto';}).length;
+  var soloProv=rows.filter(function(r){return r.estado==='solo_prov';}).length;
+  var soloEc=rows.filter(function(r){return r.estado==='solo_econt';}).length;
+  var dups=rows.filter(function(r){return r.dup;}).length;
+  var brecha=rows.filter(function(r){return r.estado!=='ok'&&r.estado!=='tol'&&r.diff!=null;}).reduce(function(a,r){return a+Math.abs(r.diff);},0);
+  var totProv=rows.filter(function(r){return r.montoProv!=null;}).reduce(function(a,r){return a+r.montoProv;},0);
+  var totEc=rows.filter(function(r){return r.montoEcont!=null;}).reduce(function(a,r){return a+r.montoEcont;},0);
+  var resultado=(diffM+soloProv+soloEc)===0?'CONCILIADO SIN DIFERENCIAS':'CONCILIADO CON OBSERVACIONES';
+  var resColor=(diffM+soloProv+soloEc)===0?'#15803d':'#b45309';
+
+  function estLabel(e){ if(e==='ok') return '✓ Conciliado'; if(e==='tol') return '≈ Tolerado'; if(e==='diff_monto') return '≠ Dif. de Monto'; if(e==='solo_prov') return 'Solo en Proveedor'; return 'Solo en Sistema'; }
+  function rowBg(e){ if(e==='ok'||e==='tol') return '#f0fdf4'; if(e==='diff_monto') return '#fffbeb'; if(e==='solo_prov') return '#fff1f2'; return '#f8fafc'; }
+
+  var bs='padding:6px 10px;border:1px solid #e2d5cb;vertical-align:middle;font-size:9pt;';
+  var thS='background:#f97316;color:#fff;padding:8px 11px;border:1px solid #ea580c;font-size:8.5pt;font-weight:700;text-align:left;white-space:nowrap;';
+  var lblS='background:#fff7ed;padding:7px 12px;border:1px solid #fed7aa;font-size:9pt;font-weight:700;color:#9a3412;width:180px;';
+  var valS='padding:7px 12px;border:1px solid #fed7aa;font-size:9pt;';
+
+  var fichaHtml='<table style="border-collapse:collapse;width:100%;margin-bottom:18px">'+
+    '<tr><td style="'+lblS+'">N° de Acta</td><td style="'+valS+'font-family:Courier New;font-weight:700;font-size:11pt;color:#ea580c">'+nroActa+'</td>'+
+    '<td style="'+lblS+'">Resultado</td><td style="'+valS+'font-weight:700;color:'+resColor+'">'+resultado+'</td></tr>'+
+    '<tr><td style="'+lblS+'">Proveedor(es)</td><td style="'+valS+'font-weight:700" colspan="3">'+escH(provs)+'</td></tr>'+
+    '<tr><td style="'+lblS+'">Fecha de ejecución</td><td style="'+valS+'">'+h.date+(h.hora?' — '+h.hora+' hs':'')+'</td>'+
+    '<td style="'+lblS+'">Ejecutado por</td><td style="'+valS+'">'+escH(h.por||'(usuario local)')+'</td></tr>'+
+    '<tr><td style="'+lblS+'">Sistema</td><td style="'+valS+'">Smart Match — Módulo Conciliación Proveedores</td>'+
+    '<td style="'+lblS+'">Tolerancia aplicada</td><td style="'+valS+'">Gs. '+fmt(h.tolerancia||0)+'</td></tr>'+
+    '<tr><td style="'+lblS+'">Registro en nube</td><td style="'+valS+'">'+(h.cloudId?'✓ Sincronizado — ID '+h.cloudId+' (verificable en el sistema)':'Solo registro local')+'</td>'+
+    '<td style="'+lblS+'">Facturas procesadas</td><td style="'+valS+'font-weight:700">'+fmt2(rows.length)+'</td></tr>'+
+  '</table>';
+
+  var kpiHtml='<table style="border-collapse:collapse;width:100%;margin-bottom:18px"><tr>'+
+    [['Conciliadas',ok+tolN,'#15803d'],['Dif. de monto',diffM,'#b45309'],['Solo proveedor',soloProv,'#dc2626'],['Solo sistema',soloEc,'#dc2626'],['Duplicados',dups,'#dc2626'],['Brecha (Gs.)',fmt(Math.round(brecha)),'#6d28d9']].map(function(k){
+      return '<td style="border:1px solid #e2d5cb;background:#faf6f2;padding:8px 10px;text-align:center;width:16%">'+
+        '<div style="font-size:7.5pt;color:#846f63;text-transform:uppercase;font-weight:700">'+k[0]+'</div>'+
+        '<div style="font-size:13pt;font-weight:700;color:'+k[2]+'">'+k[1]+'</div></td>';
+    }).join('')+
+  '</tr></table>';
+
+  var totHtml='<table style="border-collapse:collapse;margin-bottom:18px"><tr>'+
+    '<td style="'+lblS+'">Total extracto proveedor</td><td style="'+valS+'font-family:Courier New;font-weight:700">Gs. '+fmt(Math.round(totProv))+'</td>'+
+    '<td style="'+lblS+'">Total registrado e-Cont</td><td style="'+valS+'font-family:Courier New;font-weight:700">Gs. '+fmt(Math.round(totEc))+'</td>'+
+  '</tr></table>';
+
+  var thead='<tr><th style="'+thS+'">Proveedor</th><th style="'+thS+'">N° Factura</th><th style="'+thS+'">Fecha Prov.</th><th style="'+thS+'text-align:right">Monto Prov.</th><th style="'+thS+'">Fecha e-Cont</th><th style="'+thS+'text-align:right">Monto e-Cont</th><th style="'+thS+'text-align:right">Diferencia</th><th style="'+thS+'">Estado</th><th style="'+thS+'">Observación</th></tr>';
+  var rowsHtml=rows.map(function(r){
+    var bg=rowBg(r.estado); var c=bs+'background:'+bg+';';
+    var dTxt=(r.diff!=null&&Math.abs(r.diff)>=1)?((r.diff>0?'+':'−')+fmt(Math.abs(Math.round(r.diff)))):'—';
+    return '<tr>'+
+      '<td style="'+c+'">'+escH(r.prov||'—')+'</td>'+
+      '<td style="'+c+'font-family:Courier New;font-weight:600">'+escH(r.nroRaw)+'</td>'+
+      '<td style="'+c+'font-family:Courier New">'+escH(r.fechaProv||'—')+'</td>'+
+      '<td style="'+c+'text-align:right;font-family:Courier New">'+(r.montoProv!=null?fmt(r.montoProv):'—')+'</td>'+
+      '<td style="'+c+'font-family:Courier New">'+escH(r.fechaEcont||'—')+'</td>'+
+      '<td style="'+c+'text-align:right;font-family:Courier New">'+(r.montoEcont!=null?fmt(r.montoEcont):'—')+'</td>'+
+      '<td style="'+c+'text-align:right;font-family:Courier New;font-weight:700">'+dTxt+'</td>'+
+      '<td style="'+c+'font-weight:600">'+estLabel(r.estado)+'</td>'+
+      '<td style="'+c+'font-size:8pt;color:'+(r.dup?'#dc2626':'#846f63')+'">'+pvObs(r)+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var firmasHtml='<table style="border-collapse:collapse;width:100%;margin-top:45px"><tr>'+
+    '<td style="width:45%;border-top:1px solid #1c0f08;padding:8px 4px;text-align:center;font-size:9pt">Elaborado por<br><span style="color:#846f63;font-size:8pt">'+escH(h.por||'Contabilidad')+'</span></td>'+
+    '<td style="width:10%"></td>'+
+    '<td style="width:45%;border-top:1px solid #1c0f08;padding:8px 4px;text-align:center;font-size:9pt">Verificado por<br><span style="color:#846f63;font-size:8pt">Contabilidad — Central Shop</span></td>'+
+  '</tr></table>';
+
+  var html='<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'+
+    '<head><meta charset="UTF-8"></head>'+
+    '<body style="font-family:Calibri,sans-serif;color:#1c0f08;padding:24px">'+
+    '<p style="font-size:9pt;color:#846f63;margin:0">CENTRAL SHOP — CONTABILIDAD · SMART MATCH</p>'+
+    '<p style="font-size:18pt;font-weight:700;color:#f97316;margin:2px 0 2px">ACTA DE CONCILIACIÓN DE PROVEEDORES</p>'+
+    '<p style="font-size:9pt;color:#846f63;margin:0 0 16px">Constancia de ejecución del proceso automatizado de conciliación — documento de evidencia y trazabilidad</p>'+
+    fichaHtml+kpiHtml+totHtml+
+    '<p style="font-size:11pt;font-weight:700;color:#9a3412;margin:0 0 8px">DETALLE DE FACTURAS PROCESADAS</p>'+
+    '<table style="border-collapse:collapse;width:100%"><thead>'+thead+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
+    firmasHtml+
+    '<p style="margin-top:24px;font-size:7.5pt;color:#cbb8ae">Documento generado automáticamente por Smart Match el '+new Date().toLocaleString('es-PY')+' · Produced by Shift Consulting</p>'+
+    '</body></html>';
+
+  var provSlug=(h.proveedores&&h.proveedores[0]?h.proveedores[0]:'proveedor').replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ ]/g,'').replace(/\s+/g,'_').slice(0,30);
+  var fn='Acta_'+nroActa+'_'+provSlug+'.xls';
+  var blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn; a.click(); URL.revokeObjectURL(a.href);
+  showToast('🧾 Acta '+nroActa+' generada');
+}
 function delPVDay(i){
   customConfirm('Eliminar registro','¿Eliminar la ejecución del '+PV_HIST[i].date+' '+(PV_HIST[i].hora||'')+' del registro de auditoría?').then(function(ok){
     if(!ok) return;
