@@ -4612,66 +4612,162 @@ function loadProvExcel(file){
   reader.readAsArrayBuffer(file);
 }
 
+// ══ MOTORES OCR / PDF (carga perezosa — solo si se necesitan) ══
+function loadScriptOnce(src, globalName){
+  return new Promise(function(resolve, reject){
+    if(window[globalName]){ resolve(); return; }
+    var s=document.createElement('script');
+    s.src=src;
+    s.onload=function(){ resolve(); };
+    s.onerror=function(){ reject(new Error('No se pudo descargar '+globalName)); };
+    document.head.appendChild(s);
+  });
+}
+function loadTesseract(){ return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js','Tesseract'); }
+function loadPdfJs(){
+  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js','pdfjsLib').then(function(){
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  });
+}
+
+// Parser de texto libre (OCR o PDF): detecta facturas, montos y fechas línea por línea
+function parseProvText(text){
+  var rows=[]; var seen={};
+  var reFacFull=/\b(\d{3}-\d{3}-\d{5,8})\b/;
+  var reFecha=/\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/;
+  var reMonto=/\b\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?\b/g;
+  text.split(/\r?\n/).forEach(function(line){
+    var nroRaw=null;
+    var fm=line.match(reFacFull);
+    if(fm){ nroRaw=fm[1]; }
+    else {
+      // línea con número corto de factura + al menos un monto con separador de miles
+      var montoTest=line.match(reMonto);
+      var sm=line.replace(reFecha,'').match(/\b(\d{5,10})\b/);
+      if(sm&&montoTest) nroRaw=sm[1];
+    }
+    if(!nroRaw) return;
+    var key=normNroFactura(nroRaw);
+    if(seen[key]) return;
+    seen[key]=1;
+    var montos=line.match(reMonto)||[];
+    var monto=montos.length?parseMonto(montos[montos.length-1]):0;
+    var f=line.match(reFecha);
+    rows.push({nro:key,nroRaw:nroRaw,fecha:f?f[1]:'',monto:monto});
+  });
+  return rows;
+}
+
+// OCR de una imagen (File, URL o canvas) → texto
+async function pvOcr(source, onProgress){
+  await loadTesseract();
+  var res=await Tesseract.recognize(source,'spa',{
+    logger:function(m){
+      if(m.status==='recognizing text'&&onProgress) onProgress(Math.round(m.progress*100));
+    }
+  });
+  return res.data.text||'';
+}
+
+// PDF escaneado → renderizar páginas a canvas → OCR
+async function pvOcrPdfBytes(bytes, statusEl){
+  await loadPdfJs();
+  var pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes)}).promise;
+  var maxPages=Math.min(pdf.numPages,8);
+  var fullText='';
+  for(var p=1;p<=maxPages;p++){
+    if(statusEl) statusEl.textContent='⏳ OCR página '+p+'/'+maxPages+'…';
+    var page=await pdf.getPage(p);
+    var viewport=page.getViewport({scale:2});
+    var canvas=document.createElement('canvas');
+    canvas.width=viewport.width; canvas.height=viewport.height;
+    await page.render({canvasContext:canvas.getContext('2d'),viewport:viewport}).promise;
+    fullText+=await pvOcr(canvas,function(pct){
+      if(statusEl) statusEl.textContent='⏳ OCR página '+p+'/'+maxPages+' — '+pct+'%';
+    });
+    fullText+='\n';
+  }
+  return fullText;
+}
+
+// Resultado OCR → carga automática + panel de verificación editable
+function pvApplyParsedRows(rows, name, tipo){
+  PV.provRows=rows;
+  pvSetProvLoaded(name, rows.length, tipo);
+  // Prellenar panel editable para verificación rápida (OCR puede fallar en algún dígito)
+  var wrap=document.getElementById('pv-manual-rows');
+  wrap.innerHTML='';
+  rows.forEach(function(r){ pvAddManualRow(r.nroRaw, r.monto, r.fecha); });
+  document.getElementById('pv-img-panel').style.display='flex';
+  showToast('✓ '+rows.length+' facturas leídas automáticamente — verificá los datos antes de cruzar');
+}
+
 function loadProvPdf(file){
   var reader=new FileReader();
-  reader.onload=function(e){
+  reader.onload=async function(e){
+    var el=document.getElementById('b-pv-prov');
     try{
       var bytes=new Uint8Array(e.target.result);
+      // 1) Intento rápido: PDF con texto embebido
       var items=extractPdfItems(bytes);
-      // Intentar parsear patrones de facturas paraguayas
-      // Buscar: NRO factura (001-001-XXXXXXX o dígitos 5-10), monto (número grande), fecha DD/MM/YYYY
-      var rows=[];
-      var reFac=/\b(\d{3}-\d{3}-\d{5,7})\b/g;
-      var reFacShort=/\b(\d{5,10})\b/g;
-      var reFecha=/\b(\d{1,2}\/\d{2}\/\d{4})\b/g;
-      var reMonto=/\b(\d{1,3}(?:[.,]\d{3})+)\b/g;
-      var fullText=items.join(' ');
-      // Extract all invoices, amounts, dates
-      var facturas=[], montos=[], fechas=[];
-      var m;
-      while((m=reFac.exec(fullText))!==null) facturas.push(m[1]);
-      // If no formatted invoices, try short numbers
-      if(!facturas.length){
-        var used={};
-        while((m=reFacShort.exec(fullText))!==null){
-          var n=parseInt(m[1]);
-          if(n>=10000&&n<=9999999&&!used[m[1]]){facturas.push(m[1]);used[m[1]]=1;}
-        }
+      var rows=parseProvText(items.join('\n'));
+      if(!rows.length&&items.length){
+        // texto plano sin estructura de líneas — probar todo junto
+        rows=parseProvText(items.join(' '));
       }
-      while((m=reMonto.exec(fullText))!==null) montos.push(parseMonto(m[1]));
-      while((m=reFecha.exec(fullText))!==null) fechas.push(m[1]);
-      // Pair facturas with montos (best effort: zip by position)
-      facturas.forEach(function(fac,i){
-        rows.push({
-          nro:normNroFactura(fac),nroRaw:fac,
-          fecha:fechas[i]||fechas[0]||'',
-          monto:montos[i]||0
-        });
-      });
-      if(!rows.length){
-        showToast('⚠ PDF: no se detectaron facturas. Verificá el formato o usá carga manual.');
+      if(rows.length){
+        pvApplyParsedRows(rows, file.name, 'PDF');
         return;
       }
-      PV.provRows=rows;
-      pvSetProvLoaded(file.name, rows.length, 'PDF');
-    }catch(err){showToast('⚠ Error PDF: '+err.message);}
+      // 2) PDF escaneado (imagen adentro) → OCR automático
+      el.textContent='⏳ PDF escaneado — iniciando OCR…';
+      showToast('PDF sin texto — aplicando OCR automático, aguardá unos segundos…');
+      var text=await pvOcrPdfBytes(bytes, el);
+      rows=parseProvText(text);
+      if(!rows.length){
+        el.textContent='⚠ '+file.name+' — sin facturas detectadas';
+        document.getElementById('pv-manual-rows').innerHTML='';
+        pvAddManualRow();pvAddManualRow();pvAddManualRow();
+        document.getElementById('pv-img-panel').style.display='flex';
+        showToast('⚠ OCR no detectó facturas — cargá los datos manualmente');
+        return;
+      }
+      pvApplyParsedRows(rows, file.name, 'PDF·OCR');
+    }catch(err){
+      el.textContent='⚠ Error al procesar PDF';
+      showToast('⚠ Error PDF: '+err.message);
+    }
   };
   reader.readAsArrayBuffer(file);
 }
 
 function loadProvImage(file){
-  // Imagen: sin OCR client-side — mostrar preview + carga manual
   var url=URL.createObjectURL(file);
   document.getElementById('pv-img-preview').src=url;
   document.getElementById('pv-img-panel').style.display='flex';
   document.getElementById('pv-manual-rows').innerHTML='';
-  pvAddManualRow(); pvAddManualRow(); pvAddManualRow();
   var el=document.getElementById('b-pv-prov');
-  el.classList.add('ok'); el.textContent='🖼 '+file.name+' — ingresá los datos manualmente';
-  showToast('Imagen cargada — completá los datos que ves en la imagen');
+  el.textContent='⏳ Leyendo imagen con OCR…';
+  showToast('⏳ OCR en curso — la primera vez tarda unos segundos (descarga el motor)…');
+  pvOcr(url,function(pct){ el.textContent='⏳ OCR '+pct+'%…'; })
+    .then(function(text){
+      var rows=parseProvText(text);
+      if(!rows.length){
+        el.textContent='⚠ '+file.name+' — sin facturas detectadas';
+        pvAddManualRow();pvAddManualRow();pvAddManualRow();
+        showToast('⚠ OCR no detectó facturas en la imagen — cargá los datos manualmente');
+        return;
+      }
+      pvApplyParsedRows(rows, file.name, 'IMG·OCR');
+    })
+    .catch(function(err){
+      el.textContent='⚠ Error de OCR';
+      pvAddManualRow();pvAddManualRow();pvAddManualRow();
+      showToast('⚠ OCR falló ('+err.message+') — cargá los datos manualmente');
+    });
 }
 
-function pvAddManualRow(){
+function pvAddManualRow(nro, monto, fecha){
   var wrap=document.getElementById('pv-manual-rows');
   var div=document.createElement('div');
   div.style.cssText='display:flex;gap:6px;align-items:center';
@@ -4679,6 +4775,10 @@ function pvAddManualRow(){
     '<input placeholder="Monto Gs." style="flex:2;padding:6px 9px;border:1px solid var(--border2);border-radius:7px;background:var(--bg4);color:var(--tx);font-size:12px;font-family:JetBrains Mono,monospace">'+
     '<input placeholder="DD/MM/AAAA" style="flex:2;padding:6px 9px;border:1px solid var(--border2);border-radius:7px;background:var(--bg4);color:var(--tx);font-size:12px">'+
     '<button onclick="this.parentNode.remove()" style="background:var(--redb);color:var(--red);border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1">×</button>';
+  var inputs=div.querySelectorAll('input');
+  if(nro!=null) inputs[0].value=nro;
+  if(monto!=null) inputs[1].value=fmt(monto);
+  if(fecha!=null) inputs[2].value=fecha;
   wrap.appendChild(div);
 }
 
