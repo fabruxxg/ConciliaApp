@@ -1764,7 +1764,8 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
 
   <div class="sect">Registro de Auditoría y Trazabilidad</div>
   <div class="hist-hd" style="margin-bottom:1.5rem">
-    <div style="font-size:14px;color:var(--tx3);flex:1">Cada ejecución queda registrada con fecha, hora, usuario y resultados — sincronizado en la nube.</div>
+    <div style="font-size:14px;color:var(--tx3);flex:1">Cada ejecución queda registrada por proveedor con fecha, hora, usuario y resultados — sincronizado en la nube.</div>
+    <input class="srch" type="text" id="pv-hist-srch" placeholder="Buscar proveedor..." oninput="renderProvHist()" style="max-width:220px">
     <button class="act-btn danger" onclick="clearProvHist()">Vaciar Historial Local</button>
   </div>
   <div class="days-list" id="pv-hist-list"></div>
@@ -5262,27 +5263,40 @@ async function pvPullCloud(){
 function renderProvHist(){
   var list=document.getElementById('pv-hist-list'); if(!list) return;
   if(!PV_HIST.length){
-    list.innerHTML='<div class="empty-hist"><span class="empty-icon">📁</span><div class="empty-title">Sin ejecuciones registradas</div><div class="empty-sub">Cada cruce queda archivado aquí con fecha, hora y usuario.</div></div>';
+    list.innerHTML='<div class="empty-hist"><span class="empty-icon">📁</span><div class="empty-title">Sin ejecuciones registradas</div><div class="empty-sub">Cada cruce queda archivado aquí por proveedor, con fecha, hora y usuario.</div></div>';
     return;
   }
-  list.innerHTML=PV_HIST.map(function(h,i){
+  var q=(document.getElementById('pv-hist-srch')?document.getElementById('pv-hist-srch').value:'').toLowerCase().trim();
+  var entries=PV_HIST.map(function(h,i){ return {h:h, i:i}; });
+  if(q) entries=entries.filter(function(e){
+    return (e.h.proveedores||[]).some(function(p){ return String(p).toLowerCase().includes(q); });
+  });
+  if(!entries.length){
+    list.innerHTML='<div class="empty-hist"><span class="empty-icon">🔍</span><div class="empty-title">Sin resultados</div><div class="empty-sub">Ningún proveedor coincide con "'+escH(q)+'".</div></div>';
+    return;
+  }
+  list.innerHTML=entries.map(function(e){
+    var h=e.h, i=e.i;
     var ok=h.results.filter(function(r){return r.estado==='ok'||r.estado==='tol';}).length;
     var diff=h.results.filter(function(r){return r.estado==='diff_monto';}).length;
     var miss=h.results.filter(function(r){return r.estado==='solo_prov'||r.estado==='solo_econt';}).length;
     var dups=h.results.filter(function(r){return r.dup;}).length;
-    var provTxt=(h.proveedores&&h.proveedores.length)?h.proveedores.slice(0,3).join(', ')+(h.proveedores.length>3?' +'+(h.proveedores.length-3):''):'';
+    var provs=h.proveedores||[];
+    var titulo=provs.length?escH(provs[0])+(provs.length>1?' <span style="font-size:11px;color:var(--primary);font-weight:600">+'+(provs.length-1)+' más</span>':''):'(sin proveedor)';
+    var tooltip=provs.length>1?provs.map(escH).join(' · '):'';
     return '<div class="dc">'+
       '<div class="dc-hd" onclick="togglePVDay('+i+')">'+
-        '<span class="dc-date">'+h.date+(h.hora?' <span style="font-size:11px;color:var(--tx3)">'+h.hora+'</span>':'')+'</span>'+
+        '<span class="dc-date" style="min-width:220px;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'+(tooltip?' title="'+tooltip+'"':'')+'>'+titulo+
+          '<span style="display:block;font-size:11px;color:var(--tx3);font-weight:400">'+h.date+(h.hora?' · '+h.hora:'')+(h.por?' · '+escH(h.por.split('@')[0]):'')+'</span>'+
+        '</span>'+
         '<span class="dc-sys">'+
-          (provTxt?'<span style="font-size:11px;color:var(--tx2);margin-right:8px">'+escH(provTxt)+'</span>':'')+
           '<span class="dpill di">'+ok+' OK</span>'+
           (diff?'<span class="dpill dp2">'+diff+' dif.</span>':'')+
           (miss?'<span class="dpill" style="background:var(--redb);color:var(--red);">'+miss+' s/cruce</span>':'')+
           (dups?'<span class="dpill" style="background:var(--redb);color:var(--red);">⚠'+dups+'</span>':'')+
           (h.cloudId?'<span class="dpill" style="background:var(--tealb);color:var(--teal)" title="Sincronizado en la nube">☁</span>':'')+
         '</span>'+
-        '<span class="dc-stat '+(diff+miss===0?'ok2':'err2')+'">'+(h.por?escH(h.por.split('@')[0]):'')+(diff+miss===0?' ✓':' · '+(diff+miss)+' por resolver')+'</span>'+
+        '<span class="dc-stat '+(diff+miss===0?'ok2':'err2')+'">'+(diff+miss===0?'✓ Todo cuadrado':(diff+miss)+' por resolver')+'</span>'+
         '<span class="dc-chev" id="pv-arr-'+i+'">▼</span>'+
       '</div>'+
       '<div class="dc-body" id="pv-body-'+i+'">'+
