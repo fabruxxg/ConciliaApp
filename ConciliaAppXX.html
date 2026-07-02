@@ -1677,22 +1677,29 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
       <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;margin-bottom:1.25rem;letter-spacing:1px;">Orígenes de Datos</div>
       <div style="display:flex;flex-direction:column;gap:18px;">
         <div>
-          <div class="slot-label"><span class="tag-s">XLS / PDF / IMG</span>Facturas del Proveedor</div>
-          <button class="slot-btn" id="b-pv-prov" onclick="document.getElementById('f-pv-prov').click()">↑ Cargar archivo del Proveedor</button>
-          <input type="file" class="fi" id="f-pv-prov" accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.webp" onchange="loadProvFile(this)">
+          <div class="slot-label"><span class="tag-s">XLS / PDF / IMG</span>Extractos del Proveedor <span style="color:var(--tx3);font-weight:500;text-transform:none">(podés cargar varios a la vez)</span></div>
+          <button class="slot-btn" id="b-pv-prov" onclick="document.getElementById('f-pv-prov').click()">↑ Cargar archivo(s) del Proveedor</button>
+          <input type="file" class="fi" id="f-pv-prov" accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.webp" multiple onchange="loadProvFile(this)">
+          <div id="pv-file-list" style="display:flex;flex-direction:column;gap:6px;margin-top:10px"></div>
         </div>
-        <!-- Panel imagen: preview + carga manual -->
+        <!-- Panel verificación: preview + filas editables -->
         <div id="pv-img-panel" style="display:none;flex-direction:column;gap:10px">
-          <img id="pv-img-preview" style="max-width:100%;border-radius:8px;border:1px solid var(--border2);max-height:220px;object-fit:contain" src="">
-          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.8px">Ingresar facturas manualmente</div>
+          <img id="pv-img-preview" style="max-width:100%;border-radius:8px;border:1px solid var(--border2);max-height:220px;object-fit:contain;display:none" src="">
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.8px" id="pv-manual-title">Verificar / editar facturas</div>
           <div id="pv-manual-rows" style="display:flex;flex-direction:column;gap:6px"></div>
           <button class="act-btn" onclick="pvAddManualRow()" style="width:100%;font-size:12px">+ Agregar fila</button>
-          <button class="act-btn primary" onclick="pvConfirmManual()" style="width:100%;font-size:12px">✓ Confirmar datos ingresados</button>
+          <button class="act-btn primary" onclick="pvConfirmManual()" style="width:100%;font-size:12px">✓ Confirmar datos</button>
         </div>
         <div>
           <div class="slot-label"><span class="tag-s">XLS</span>Saldo Proveedores — e-Cont</div>
           <button class="slot-btn" id="b-pv-econt" onclick="document.getElementById('f-pv-econt').click()">↑ Cargar Excel e-Cont</button>
           <input type="file" class="fi" id="f-pv-econt" accept=".xlsx,.xls,.csv" onchange="loadEcontXls(this)">
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-end">
+          <div style="flex:1">
+            <div class="slot-label">Tolerancia de redondeo (Gs.)</div>
+            <input id="pv-tol" type="number" value="0" min="0" step="100" style="width:100%;padding:9px 12px;border:1px solid var(--border2);border-radius:9px;background:var(--bg4);color:var(--tx);font-size:13px;font-family:'JetBrains Mono',monospace" title="Diferencias hasta este monto se consideran conciliadas por redondeo">
+          </div>
         </div>
         <button class="run-main" id="run-prov" disabled onclick="runProveedores()" style="width:100%;justify-content:center;margin-top:8px;">Cruzar Facturas ▸</button>
       </div>
@@ -1710,9 +1717,11 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
 
   <div class="bc-legend" id="pv-legend">
     <span class="badge bap">✓ Conciliado</span>
+    <span class="badge bap">≈ Tolerado</span>
     <span class="badge ban">≠ Diferencia de Monto</span>
     <span class="badge bre">✗ Solo en Proveedor</span>
     <span class="badge bx">— Solo en Sistema</span>
+    <span class="badge ban">⚠ Duplicado</span>
   </div>
 
   <div class="tc" id="pv-table-wrap" style="display:none">
@@ -1723,14 +1732,16 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
         <button class="pill" onclick="setPVF('diff',this)">Dif. Monto</button>
         <button class="pill" onclick="setPVF('solo_prov',this)">Solo Proveedor</button>
         <button class="pill" onclick="setPVF('solo_econt',this)">Solo Sistema</button>
+        <button class="pill" onclick="setPVF('dup',this)">⚠ Duplicados</button>
       </div>
-      <input class="srch" type="text" placeholder="Filtrar por factura..." id="srch-pv" oninput="renderProvTbl()">
+      <input class="srch" type="text" placeholder="Filtrar por factura o proveedor..." id="srch-pv" oninput="renderProvTbl()">
       <button class="act-btn primary" onclick="exportProvXlsx()">Exportar XLSX</button>
     </div>
     <div class="ibar" id="ibar-pv">Ejecutá el cruce para ver el detalle de conciliación.</div>
     <div class="tscr">
       <table>
         <thead><tr>
+          <th>Proveedor</th>
           <th>N° Factura</th>
           <th>Fecha Proveedor</th>
           <th style="text-align:right">Monto Proveedor</th>
@@ -1738,8 +1749,9 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
           <th style="text-align:right">Monto e-Cont</th>
           <th style="text-align:right">Diferencia</th>
           <th>Estado</th>
+          <th>Observación</th>
         </tr></thead>
-        <tbody id="pv-tbody"><tr><td colspan="7" class="empty-tbl">Cargá ambos archivos para ver los resultados del cruce.</td></tr></tbody>
+        <tbody id="pv-tbody"><tr><td colspan="9" class="empty-tbl">Cargá ambos archivos para ver los resultados del cruce.</td></tr></tbody>
       </table>
     </div>
     <div class="pgr">
@@ -1750,10 +1762,10 @@ document.getElementById('login-form').addEventListener('submit', procesarLoginFo
     </div>
   </div>
 
-  <div class="sect">Registro Histórico de Conciliaciones</div>
+  <div class="sect">Registro de Auditoría y Trazabilidad</div>
   <div class="hist-hd" style="margin-bottom:1.5rem">
-    <div style="font-size:14px;color:var(--tx3);flex:1">Los cruces anteriores se archivan de forma segura en este navegador.</div>
-    <button class="act-btn danger" onclick="clearProvHist()">Vaciar Historial</button>
+    <div style="font-size:14px;color:var(--tx3);flex:1">Cada ejecución queda registrada con fecha, hora, usuario y resultados — sincronizado en la nube.</div>
+    <button class="act-btn danger" onclick="clearProvHist()">Vaciar Historial Local</button>
   </div>
   <div class="days-list" id="pv-hist-list"></div>
 </div>
@@ -2321,6 +2333,7 @@ function goTo(name, el){
     }
   }
   if(name === 'tbl'){ if(!ST.filtered.length) ST.filtered = ST.viewRows || ST.rows; renderTbl(); }
+  if(name === 'proveedores'){ renderProvHist(); pvPullCloud(); }
   if(name === 'recruit'){ loadRecruit(); botPoll(); botPollStart(false); }
   else { if(BOT.pollTimer){ clearInterval(BOT.pollTimer); BOT.pollTimer=null; } }
 }
@@ -4555,9 +4568,73 @@ function uploadJsonCandidates(input){
 // CONCILIACIÓN PROVEEDORES
 // ══════════════════════════════════════════
 var PV = {
-  provRows: [], econtRows: [], results: [], filtered: [],
-  page: 1, perPage: 50, provLoaded: false, econtLoaded: false
+  provFiles: [],       // [{id, name, tipo, proveedor, ruc, rows:[]}] — batch multi-proveedor
+  econtRows: [], results: [], filtered: [],
+  page: 1, perPage: 50, econtLoaded: false,
+  manualTarget: null   // id del archivo en edición manual
 };
+var PV_SEQ = 1;
+
+// Detecta RUC y nombre del proveedor en texto libre (OCR/PDF) o nombre de archivo
+function detectProveedorInfo(text, fallbackName){
+  var ruc='';
+  var rm=String(text||'').match(/\b(\d{6,8}-\d)\b/);
+  if(rm) ruc=rm[1];
+  var nombre='';
+  var lines=String(text||'').split(/\r?\n/);
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i].trim();
+    // línea con mayoría de letras, sin ser encabezado genérico
+    if(l.length>=6 && /[A-ZÁÉÍÓÚÑa-z]{4,}/.test(l) && !/EXTRACTO|ESTADO DE CUENTA|FACTURA|FECHA|MONTO|TOTAL|SALDO|RUC[\s:]/i.test(l)){
+      nombre=l.replace(/\s{2,}/g,' ').slice(0,60); break;
+    }
+  }
+  if(!nombre) nombre=(fallbackName||'').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim();
+  return {ruc:ruc, nombre:nombre||'Proveedor'};
+}
+
+// Alta/actualización de archivo procesado en el lote
+function pvUpsertFile(f){
+  var existing=PV.provFiles.find(function(x){return x.name===f.name;});
+  if(existing){ Object.assign(existing, f); }
+  else { f.id=PV_SEQ++; PV.provFiles.push(f); }
+  renderProvFileList();
+  checkProvRun();
+}
+
+function renderProvFileList(){
+  var wrap=document.getElementById('pv-file-list'); if(!wrap) return;
+  if(!PV.provFiles.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML=PV.provFiles.map(function(f){
+    var tag={Excel:'XLS',PDF:'PDF','PDF·OCR':'PDF·OCR','IMG·OCR':'IMG·OCR',Manual:'MAN'}[f.tipo]||f.tipo;
+    return '<div style="display:flex;gap:8px;align-items:center;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:7px 10px">'+
+      '<span style="font-size:10px;font-weight:700;color:var(--primary);background:var(--primary-f);padding:2px 6px;border-radius:4px;white-space:nowrap">'+tag+'</span>'+
+      '<input value="'+escH(f.proveedor||'')+'" onchange="pvSetProveedor('+f.id+',this.value)" title="Nombre del proveedor (editable)" style="flex:1;min-width:0;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--tx);font-size:12px">'+
+      '<span style="font-size:11px;color:var(--tx3);white-space:nowrap">'+f.rows.length+' fact.</span>'+
+      '<button onclick="pvEditFile('+f.id+')" title="Revisar / editar facturas" style="background:var(--primary-f);color:var(--primary);border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✎</button>'+
+      '<button onclick="pvRemoveFile('+f.id+')" title="Quitar archivo" style="background:var(--redb);color:var(--red);border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">×</button>'+
+    '</div>';
+  }).join('');
+}
+
+function pvSetProveedor(id,val){ var f=PV.provFiles.find(function(x){return x.id===id;}); if(f) f.proveedor=val.trim()||f.proveedor; }
+function pvRemoveFile(id){
+  PV.provFiles=PV.provFiles.filter(function(x){return x.id!==id;});
+  if(PV.manualTarget===id){ PV.manualTarget=null; document.getElementById('pv-img-panel').style.display='none'; }
+  renderProvFileList(); checkProvRun();
+}
+function pvEditFile(id){
+  var f=PV.provFiles.find(function(x){return x.id===id;}); if(!f) return;
+  PV.manualTarget=id;
+  document.getElementById('pv-manual-title').textContent='Verificar / editar — '+f.name+' ('+(f.proveedor||'')+')';
+  var img=document.getElementById('pv-img-preview');
+  if(f.previewUrl){ img.src=f.previewUrl; img.style.display='block'; } else { img.style.display='none'; }
+  var wrap=document.getElementById('pv-manual-rows');
+  wrap.innerHTML='';
+  f.rows.forEach(function(r){ pvAddManualRow(r.nroRaw, r.monto, r.fecha); });
+  if(!f.rows.length){ pvAddManualRow();pvAddManualRow();pvAddManualRow(); }
+  document.getElementById('pv-img-panel').style.display='flex';
+}
 
 function normNroFactura(s) {
   if(!s) return '';
@@ -4580,36 +4657,54 @@ function parseMonto(s){
 }
 
 function loadProvFile(input){
-  var file=input.files[0]; if(!file) return;
+  var files=Array.from(input.files||[]); if(!files.length) return;
+  input.value='';
   document.getElementById('pv-img-panel').style.display='none';
-  var ext=file.name.split('.').pop().toLowerCase();
-  if(ext==='pdf') { loadProvPdf(file); return; }
-  if(['jpg','jpeg','png','webp'].indexOf(ext)>=0) { loadProvImage(file); return; }
-  loadProvExcel(file);
+  // Procesar en serie: OCR no soporta bien instancias paralelas
+  var chain=Promise.resolve();
+  files.forEach(function(file){
+    chain=chain.then(function(){
+      var ext=file.name.split('.').pop().toLowerCase();
+      if(ext==='pdf') return loadProvPdf(file);
+      if(['jpg','jpeg','png','webp'].indexOf(ext)>=0) return loadProvImage(file);
+      return loadProvExcel(file);
+    }).catch(function(err){ showToast('⚠ '+file.name+': '+err.message); });
+  });
+  chain.then(function(){
+    var tot=PV.provFiles.reduce(function(a,f){return a+f.rows.length;},0);
+    if(PV.provFiles.length>1) showToast('✓ Lote listo: '+PV.provFiles.length+' archivos · '+tot+' facturas');
+  });
 }
 
 function loadProvExcel(file){
-  var reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      var wb=XLSX.read(e.target.result,{type:'array'});
-      var ws=wb.Sheets[wb.SheetNames[0]];
-      var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      if(!data.length){showToast('⚠ Archivo vacío');return;}
-      var headers=data[0];
-      var colNro=detectCol(headers,['factura','nro','numero','comprobante','n°','nº','doc','timbrado']);
-      var colMonto=detectCol(headers,['monto','importe','total','valor','amount','subtotal']);
-      var colFecha=detectCol(headers,['fecha','date','fec']);
-      if(colNro<0){showToast('⚠ Proveedor: no se detectó columna de N° factura');return;}
-      if(colMonto<0){showToast('⚠ Proveedor: no se detectó columna de monto');return;}
-      PV.provRows=data.slice(1).filter(function(r){return r[colNro]&&String(r[colNro]).trim();}).map(function(r){
-        var raw=String(r[colNro]||'').trim();
-        return {nro:normNroFactura(raw),nroRaw:raw,fecha:String(r[colFecha]||''),monto:parseMonto(r[colMonto])};
-      });
-      pvSetProvLoaded(file.name, PV.provRows.length, 'Excel');
-    }catch(err){showToast('⚠ Error: '+err.message);}
-  };
-  reader.readAsArrayBuffer(file);
+  return new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var wb=XLSX.read(e.target.result,{type:'array'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if(!data.length){ showToast('⚠ '+file.name+': archivo vacío'); resolve(); return; }
+        var headers=data[0];
+        var colNro=detectCol(headers,['factura','nro','numero','comprobante','n°','nº','doc','timbrado']);
+        var colMonto=detectCol(headers,['monto','importe','total','valor','amount','subtotal']);
+        var colFecha=detectCol(headers,['fecha','date','fec']);
+        if(colNro<0||colMonto<0){ showToast('⚠ '+file.name+': no se detectaron columnas de factura/monto'); resolve(); return; }
+        var rows=data.slice(1).filter(function(r){return r[colNro]&&String(r[colNro]).trim();}).map(function(r){
+          var raw=String(r[colNro]||'').trim();
+          return {nro:normNroFactura(raw),nroRaw:raw,fecha:String(r[colFecha]||''),monto:parseMonto(r[colMonto])};
+        });
+        // Buscar RUC en las primeras celdas del archivo
+        var headText=data.slice(0,6).map(function(r){return r.join(' ');}).join('\n');
+        var info=detectProveedorInfo(headText, file.name);
+        pvUpsertFile({name:file.name, tipo:'Excel', proveedor:info.nombre, ruc:info.ruc, rows:rows});
+        showToast('✓ ['+info.nombre+'] '+rows.length+' facturas (Excel)');
+        resolve();
+      }catch(err){ reject(err); }
+    };
+    reader.onerror=function(){ reject(new Error('lectura fallida')); };
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 // ══ MOTORES OCR / PDF (carga perezosa — solo si se necesitan) ══
@@ -4690,80 +4785,75 @@ async function pvOcrPdfBytes(bytes, statusEl){
   return fullText;
 }
 
-// Resultado OCR → carga automática + panel de verificación editable
-function pvApplyParsedRows(rows, name, tipo){
-  PV.provRows=rows;
-  pvSetProvLoaded(name, rows.length, tipo);
-  // Prellenar panel editable para verificación rápida (OCR puede fallar en algún dígito)
-  var wrap=document.getElementById('pv-manual-rows');
-  wrap.innerHTML='';
-  rows.forEach(function(r){ pvAddManualRow(r.nroRaw, r.monto, r.fecha); });
-  document.getElementById('pv-img-panel').style.display='flex';
-  showToast('✓ '+rows.length+' facturas leídas automáticamente — verificá los datos antes de cruzar');
+// Resultado parseado → alta en lote + toast
+function pvApplyParsedRows(rows, text, file, tipo, previewUrl){
+  var info=detectProveedorInfo(text, file.name);
+  pvUpsertFile({name:file.name, tipo:tipo, proveedor:info.nombre, ruc:info.ruc, rows:rows, previewUrl:previewUrl||null});
+  showToast('✓ ['+info.nombre+'] '+rows.length+' facturas leídas automáticamente ('+tipo+')');
 }
 
 function loadProvPdf(file){
-  var reader=new FileReader();
-  reader.onload=async function(e){
-    var el=document.getElementById('b-pv-prov');
-    try{
-      var bytes=new Uint8Array(e.target.result);
-      // 1) Intento rápido: PDF con texto embebido
-      var items=extractPdfItems(bytes);
-      var rows=parseProvText(items.join('\n'));
-      if(!rows.length&&items.length){
-        // texto plano sin estructura de líneas — probar todo junto
-        rows=parseProvText(items.join(' '));
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=async function(e){
+      var el=document.getElementById('b-pv-prov');
+      try{
+        var bytes=new Uint8Array(e.target.result);
+        // 1) Intento rápido: PDF con texto embebido
+        var items=extractPdfItems(bytes);
+        var text=items.join('\n');
+        var rows=parseProvText(text);
+        if(!rows.length&&items.length){ text=items.join(' '); rows=parseProvText(text); }
+        if(rows.length){
+          pvApplyParsedRows(rows, text, file, 'PDF');
+          el.textContent='↑ Cargar archivo(s) del Proveedor';
+          resolve(); return;
+        }
+        // 2) PDF escaneado (imagen adentro) → OCR automático
+        el.textContent='⏳ '+file.name+' — OCR…';
+        showToast('⏳ '+file.name+': PDF sin texto — aplicando OCR automático…');
+        var ocrText=await pvOcrPdfBytes(bytes, el);
+        rows=parseProvText(ocrText);
+        el.textContent='↑ Cargar archivo(s) del Proveedor';
+        if(!rows.length){
+          pvUpsertFile({name:file.name, tipo:'PDF·OCR', proveedor:detectProveedorInfo(ocrText,file.name).nombre, ruc:'', rows:[]});
+          pvEditFile(PV.provFiles[PV.provFiles.length-1].id);
+          showToast('⚠ '+file.name+': OCR sin facturas — cargá manualmente');
+          resolve(); return;
+        }
+        pvApplyParsedRows(rows, ocrText, file, 'PDF·OCR');
+        resolve();
+      }catch(err){
+        el.textContent='↑ Cargar archivo(s) del Proveedor';
+        showToast('⚠ '+file.name+': '+err.message);
+        resolve();
       }
-      if(rows.length){
-        pvApplyParsedRows(rows, file.name, 'PDF');
-        return;
-      }
-      // 2) PDF escaneado (imagen adentro) → OCR automático
-      el.textContent='⏳ PDF escaneado — iniciando OCR…';
-      showToast('PDF sin texto — aplicando OCR automático, aguardá unos segundos…');
-      var text=await pvOcrPdfBytes(bytes, el);
-      rows=parseProvText(text);
-      if(!rows.length){
-        el.textContent='⚠ '+file.name+' — sin facturas detectadas';
-        document.getElementById('pv-manual-rows').innerHTML='';
-        pvAddManualRow();pvAddManualRow();pvAddManualRow();
-        document.getElementById('pv-img-panel').style.display='flex';
-        showToast('⚠ OCR no detectó facturas — cargá los datos manualmente');
-        return;
-      }
-      pvApplyParsedRows(rows, file.name, 'PDF·OCR');
-    }catch(err){
-      el.textContent='⚠ Error al procesar PDF';
-      showToast('⚠ Error PDF: '+err.message);
-    }
-  };
-  reader.readAsArrayBuffer(file);
+    };
+    reader.onerror=function(){ resolve(); };
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 function loadProvImage(file){
   var url=URL.createObjectURL(file);
-  document.getElementById('pv-img-preview').src=url;
-  document.getElementById('pv-img-panel').style.display='flex';
-  document.getElementById('pv-manual-rows').innerHTML='';
   var el=document.getElementById('b-pv-prov');
-  el.textContent='⏳ Leyendo imagen con OCR…';
+  el.textContent='⏳ '+file.name+' — OCR…';
   showToast('⏳ OCR en curso — la primera vez tarda unos segundos (descarga el motor)…');
-  pvOcr(url,function(pct){ el.textContent='⏳ OCR '+pct+'%…'; })
+  return pvOcr(url,function(pct){ el.textContent='⏳ '+file.name+' — OCR '+pct+'%…'; })
     .then(function(text){
+      el.textContent='↑ Cargar archivo(s) del Proveedor';
       var rows=parseProvText(text);
       if(!rows.length){
-        el.textContent='⚠ '+file.name+' — sin facturas detectadas';
-        pvAddManualRow();pvAddManualRow();pvAddManualRow();
-        showToast('⚠ OCR no detectó facturas en la imagen — cargá los datos manualmente');
+        pvUpsertFile({name:file.name, tipo:'IMG·OCR', proveedor:detectProveedorInfo(text,file.name).nombre, ruc:'', rows:[], previewUrl:url});
+        pvEditFile(PV.provFiles[PV.provFiles.length-1].id);
+        showToast('⚠ '+file.name+': OCR sin facturas — cargá manualmente');
         return;
       }
-      pvApplyParsedRows(rows, file.name, 'IMG·OCR');
+      pvApplyParsedRows(rows, text, file, 'IMG·OCR', url);
     })
     .catch(function(err){
-      el.textContent='⚠ Error de OCR';
-      pvAddManualRow();pvAddManualRow();pvAddManualRow();
-      showToast('⚠ OCR falló ('+err.message+') — cargá los datos manualmente');
+      el.textContent='↑ Cargar archivo(s) del Proveedor';
+      showToast('⚠ OCR falló en '+file.name+': '+err.message);
     });
 }
 
@@ -4794,18 +4884,13 @@ function pvConfirmManual(){
     rows.push({nro:normNroFactura(nroRaw),nroRaw:nroRaw,fecha:fecha,monto:parseMonto(montoStr)});
   });
   if(!rows.length){showToast('⚠ Ingresá al menos una factura');return;}
-  PV.provRows=rows;
+  var f=PV.provFiles.find(function(x){return x.id===PV.manualTarget;});
+  if(f){ f.rows=rows; if(f.tipo==='IMG·OCR'||f.tipo==='PDF·OCR') f.tipo=f.tipo; }
+  else { pvUpsertFile({name:'carga manual', tipo:'Manual', proveedor:'Proveedor', ruc:'', rows:rows}); }
   document.getElementById('pv-img-panel').style.display='none';
-  pvSetProvLoaded('imagen manual',rows.length,'Imagen');
-}
-
-function pvSetProvLoaded(name, count, tipo){
-  PV.provLoaded=true;
-  var el=document.getElementById('b-pv-prov');
-  var tag={Excel:'XLS',PDF:'PDF',Imagen:'IMG'}[tipo]||tipo;
-  el.classList.add('ok'); el.textContent='✓ ['+tag+'] '+name+' ('+count+' facturas)';
-  checkProvRun();
-  showToast('✓ Proveedor ('+tipo+'): '+count+' facturas cargadas');
+  PV.manualTarget=null;
+  renderProvFileList(); checkProvRun();
+  showToast('✓ '+rows.length+' facturas confirmadas');
 }
 
 function loadEcontXls(input){
@@ -4838,73 +4923,92 @@ function loadEcontXls(input){
 }
 
 function checkProvRun(){
-  document.getElementById('run-prov').disabled=!(PV.provLoaded&&PV.econtLoaded);
+  var hasProv=PV.provFiles.some(function(f){return f.rows.length;});
+  document.getElementById('run-prov').disabled=!(hasProv&&PV.econtLoaded);
 }
 
 function runProveedores(){
-  if(!PV.provRows.length||!PV.econtRows.length) return;
+  var files=PV.provFiles.filter(function(f){return f.rows.length;});
+  if(!files.length||!PV.econtRows.length) return;
+  var tol=Math.max(0,parseInt(document.getElementById('pv-tol').value)||0);
 
-  // Mapa e-Cont: nro normalizado → [filas]
-  var econtMap={};
-  PV.econtRows.forEach(function(r){
-    if(!econtMap[r.nro]) econtMap[r.nro]=[];
-    econtMap[r.nro].push(r);
+  // ── Control de duplicados: mismo nro repetido dentro de cada origen
+  var provCount={}, econtCount={};
+  files.forEach(function(f){ f.rows.forEach(function(r){ provCount[r.nro]=(provCount[r.nro]||0)+1; }); });
+  PV.econtRows.forEach(function(r){ econtCount[r.nro]=(econtCount[r.nro]||0)+1; });
+
+  // ── Índices e-Cont: exacto + sufijos (7 y 5 dígitos) para cruzar formatos distintos
+  var pool=PV.econtRows.map(function(r){ return {nro:r.nro,nroRaw:r.nroRaw,fecha:r.fecha,monto:r.monto,used:false}; });
+  var byNro={}, bySuf7={}, bySuf5={};
+  pool.forEach(function(r){
+    (byNro[r.nro]=byNro[r.nro]||[]).push(r);
+    if(r.nro.length>=7) (bySuf7[r.nro.slice(-7)]=bySuf7[r.nro.slice(-7)]||[]).push(r);
+    if(r.nro.length>=5) (bySuf5[r.nro.slice(-5)]=bySuf5[r.nro.slice(-5)]||[]).push(r);
   });
+  function takeExact(nro){
+    var l=byNro[nro]||[];
+    for(var i=0;i<l.length;i++) if(!l[i].used) return l[i];
+    return null;
+  }
+  function takeSuffix(nro){
+    // Sufijo solo si es inequívoco entre los no usados (seguridad contable)
+    var cands=[];
+    if(nro.length>=7) cands=(bySuf7[nro.slice(-7)]||[]).filter(function(r){return !r.used&&r.nro!==nro;});
+    if(cands.length!==1&&nro.length>=5){
+      var c5=(bySuf5[nro.slice(-5)]||[]).filter(function(r){return !r.used&&r.nro!==nro;});
+      if(cands.length===0) cands=c5;
+    }
+    return cands.length===1?cands[0]:null;
+  }
 
   var results=[];
-  var usedEcont={}; // nro → cantidad consumida
-
-  // Cruzar cada factura del proveedor
-  PV.provRows.forEach(function(pv){
-    var matches=econtMap[pv.nro]||[];
-    var used=usedEcont[pv.nro]||0;
-    var match=matches[used]||null;
-    if(!match){
-      results.push({nroRaw:pv.nroRaw,nro:pv.nro,fechaProv:pv.fecha,montoProv:pv.monto,fechaEcont:'',montoEcont:null,diff:pv.monto,estado:'solo_prov'});
-    } else {
-      usedEcont[pv.nro]=(used+1);
-      var diff=pv.monto-match.monto;
-      var estado=Math.abs(diff)<1?'ok':'diff_monto';
-      results.push({nroRaw:pv.nroRaw,nro:pv.nro,fechaProv:pv.fecha,montoProv:pv.monto,fechaEcont:match.fecha,montoEcont:match.monto,diff:diff,estado:estado});
-    }
-  });
-
-  // Facturas en e-Cont sin cruce
-  PV.econtRows.forEach(function(ec){
-    var consumed=usedEcont[ec.nro]||0;
-    var available=(econtMap[ec.nro]||[]).length;
-    if(consumed<available){
-      // hay más en econt que en proveedor — agregar los sobrantes
-      for(var i=consumed;i<available;i++){
-        var row=(econtMap[ec.nro]||[])[i];
-        results.push({nroRaw:row.nroRaw,nro:row.nro,fechaProv:'',montoProv:null,fechaEcont:row.fecha,montoEcont:row.monto,diff:-row.monto,estado:'solo_econt'});
+  files.forEach(function(f){
+    var provName=f.proveedor||f.name;
+    f.rows.forEach(function(pv){
+      var dup=provCount[pv.nro]>1;
+      var m=takeExact(pv.nro); var via='';
+      if(!m){ m=takeSuffix(pv.nro); if(m) via='sufijo'; }
+      if(!m){
+        results.push({prov:provName,nroRaw:pv.nroRaw,nro:pv.nro,fechaProv:pv.fecha,montoProv:pv.monto,fechaEcont:'',montoEcont:null,diff:pv.monto,estado:'solo_prov',dup:dup,via:''});
+        return;
       }
-      usedEcont[ec.nro]=available;
-    }
+      m.used=true;
+      if(econtCount[m.nro]>1) dup=true;
+      var diff=pv.monto-m.monto;
+      var estado=Math.abs(diff)<1?'ok':(Math.abs(diff)<=tol?'tol':'diff_monto');
+      results.push({prov:provName,nroRaw:pv.nroRaw,nro:pv.nro,fechaProv:pv.fecha,montoProv:pv.monto,fechaEcont:m.fecha,montoEcont:m.monto,diff:diff,estado:estado,dup:dup,via:via});
+    });
+  });
+  // Registros e-Cont sin cruce
+  pool.forEach(function(r){
+    if(!r.used) results.push({prov:'—',nroRaw:r.nroRaw,nro:r.nro,fechaProv:'',montoProv:null,fechaEcont:r.fecha,montoEcont:r.monto,diff:-r.monto,estado:'solo_econt',dup:econtCount[r.nro]>1,via:''});
   });
 
   PV.results=results; PV.filtered=results; PV.page=1;
 
   var ok=results.filter(function(r){return r.estado==='ok';}).length;
+  var tolN=results.filter(function(r){return r.estado==='tol';}).length;
   var diffM=results.filter(function(r){return r.estado==='diff_monto';}).length;
   var soloProv=results.filter(function(r){return r.estado==='solo_prov';}).length;
   var soloEc=results.filter(function(r){return r.estado==='solo_econt';}).length;
-  var brechaTotal=results.filter(function(r){return r.diff!=null&&Math.abs(r.diff)>=1;}).reduce(function(a,r){return a+Math.abs(r.diff);},0);
+  var dups=results.filter(function(r){return r.dup;}).length;
+  var brechaTotal=results.filter(function(r){return r.estado!=='ok'&&r.estado!=='tol'&&r.diff!=null;}).reduce(function(a,r){return a+Math.abs(r.diff);},0);
 
   document.getElementById('pv-legend').classList.add('show');
   document.getElementById('pv-table-wrap').style.display='block';
 
   document.getElementById('pv-kpis').innerHTML=[
-    {label:'Conciliadas',val:ok,c:'var(--teal)'},
+    {label:'Conciliadas',val:ok+(tolN?(' +'+tolN+'≈'):''),c:'var(--teal)'},
     {label:'Dif. de Monto',val:diffM,c:'var(--amber)'},
     {label:'Solo Proveedor',val:soloProv,c:'var(--red)'},
     {label:'Solo Sistema',val:soloEc,c:'var(--red)'},
+    {label:'⚠ Duplicados',val:dups,c:dups?'var(--red)':'var(--tx3)'},
     {label:'Brecha Total',val:'Gs. '+fmt(Math.round(brechaTotal)),c:'var(--primary)'}
   ].map(function(m){return '<div class="bc-kpi"><div class="bc-kpi-lbl">'+m.label+'</div><div class="bc-kpi-val" style="color:'+m.c+'">'+m.val+'</div></div>';}).join('');
 
   renderProvTbl();
-  saveToProvHist(results);
-  showToast('✓ Conciliación finalizada · '+results.length+' registros procesados');
+  saveToProvHist(results, files.map(function(f){return f.proveedor||f.name;}), tol);
+  showToast('✓ Conciliación finalizada · '+results.length+' registros · '+files.length+' proveedor(es)');
 }
 
 var PVF='all';
@@ -4914,14 +5018,23 @@ function setPVF(f,btn){
   btn.classList.add('on'); PV.page=1; renderProvTbl();
 }
 
+function pvObs(r){
+  var obs=[];
+  if(r.dup) obs.push('⚠ DUPLICADO');
+  if(r.via==='sufijo') obs.push('match por sufijo');
+  if(r.estado==='tol') obs.push('dentro de tolerancia');
+  return obs.join(' · ');
+}
+
 function renderProvTbl(){
   var rows=[].concat(PV.results);
   var q=(document.getElementById('srch-pv')?document.getElementById('srch-pv').value:'').toLowerCase();
-  if(PVF==='ok') rows=rows.filter(function(r){return r.estado==='ok';});
+  if(PVF==='ok') rows=rows.filter(function(r){return r.estado==='ok'||r.estado==='tol';});
   else if(PVF==='diff') rows=rows.filter(function(r){return r.estado==='diff_monto';});
   else if(PVF==='solo_prov') rows=rows.filter(function(r){return r.estado==='solo_prov';});
   else if(PVF==='solo_econt') rows=rows.filter(function(r){return r.estado==='solo_econt';});
-  if(q) rows=rows.filter(function(r){return (r.nroRaw+r.fechaProv+r.estado).toLowerCase().includes(q);});
+  else if(PVF==='dup') rows=rows.filter(function(r){return r.dup;});
+  if(q) rows=rows.filter(function(r){return ((r.prov||'')+r.nroRaw+r.fechaProv+r.estado).toLowerCase().includes(q);});
   PV.filtered=rows;
   var tot=rows.length,pages=Math.max(1,Math.ceil(tot/PV.perPage));
   if(PV.page>pages) PV.page=1;
@@ -4939,6 +5052,7 @@ function renderProvTbl(){
 
   function pvBadge(e){
     if(e==='ok') return '<span class="badge bap">✓ Conciliado</span>';
+    if(e==='tol') return '<span class="badge bap">≈ Tolerado</span>';
     if(e==='diff_monto') return '<span class="badge ban">≠ Dif. Monto</span>';
     if(e==='solo_prov') return '<span class="badge bre">Solo Proveedor</span>';
     return '<span class="badge bx">Solo Sistema</span>';
@@ -4949,16 +5063,19 @@ function renderProvTbl(){
   }
 
   var tb=document.getElementById('pv-tbody');
-  if(!sl.length){tb.innerHTML='<tr><td colspan="7" class="empty-tbl">Sin resultados para el filtro seleccionado.</td></tr>';return;}
+  if(!sl.length){tb.innerHTML='<tr><td colspan="9" class="empty-tbl">Sin resultados para el filtro seleccionado.</td></tr>';return;}
   tb.innerHTML=sl.map(function(r){
-    return '<tr class="'+(r.estado!=='ok'?'has-diff':'')+'">'+
-      '<td class="mono" style="font-weight:600">'+r.nroRaw+'</td>'+
+    var okish=(r.estado==='ok'||r.estado==='tol');
+    return '<tr class="'+(!okish?'has-diff':'')+'">'+
+      '<td style="font-weight:600;color:var(--tx);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escH(r.prov||'—')+'</td>'+
+      '<td class="mono" style="font-weight:600">'+escH(r.nroRaw)+'</td>'+
       '<td class="mono">'+(r.fechaProv||'<span style="color:var(--tx3)">-</span>')+'</td>'+
       '<td class="mono" style="text-align:right">'+(r.montoProv!=null?'Gs. '+fmt(r.montoProv):'<span style="color:var(--tx3)">-</span>')+'</td>'+
       '<td class="mono">'+(r.fechaEcont||'<span style="color:var(--tx3)">-</span>')+'</td>'+
       '<td class="mono" style="text-align:right">'+(r.montoEcont!=null?'Gs. '+fmt(r.montoEcont):'<span style="color:var(--tx3)">-</span>')+'</td>'+
       '<td class="mono" style="text-align:right">'+pvDiff(r.diff,r.estado)+'</td>'+
       '<td>'+pvBadge(r.estado)+'</td>'+
+      '<td style="font-size:11px;color:'+(r.dup?'var(--red)':'var(--tx3)')+';max-width:170px">'+pvObs(r)+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -4970,14 +5087,16 @@ function exportProvXlsx(){
   var dateStr=new Date().toLocaleDateString('es-PY',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
   var rows=PV.filtered;
   var ok=rows.filter(function(r){return r.estado==='ok';}).length;
+  var tolN=rows.filter(function(r){return r.estado==='tol';}).length;
   var diffM=rows.filter(function(r){return r.estado==='diff_monto';}).length;
   var soloProv=rows.filter(function(r){return r.estado==='solo_prov';}).length;
   var soloEc=rows.filter(function(r){return r.estado==='solo_econt';}).length;
-  var brecha=rows.filter(function(r){return r.diff!=null&&Math.abs(r.diff)>=1;}).reduce(function(a,r){return a+Math.abs(r.diff);},0);
+  var dups=rows.filter(function(r){return r.dup;}).length;
+  var brecha=rows.filter(function(r){return r.estado!=='ok'&&r.estado!=='tol'&&r.diff!=null;}).reduce(function(a,r){return a+Math.abs(r.diff);},0);
 
-  function rowBg(e){ if(e==='ok') return '#f0fdf4'; if(e==='diff_monto') return '#fffbeb'; if(e==='solo_prov') return '#fff1f2'; return '#f8fafc'; }
-  function estLabel(e){ if(e==='ok') return '✓ Conciliado'; if(e==='diff_monto') return '≠ Dif. de Monto'; if(e==='solo_prov') return 'Solo en Proveedor'; return 'Solo en Sistema'; }
-  function estColor(e){ if(e==='ok') return '#15803d'; if(e==='diff_monto') return '#b45309'; if(e==='solo_prov') return '#dc2626'; return '#475569'; }
+  function rowBg(e){ if(e==='ok'||e==='tol') return '#f0fdf4'; if(e==='diff_monto') return '#fffbeb'; if(e==='solo_prov') return '#fff1f2'; return '#f8fafc'; }
+  function estLabel(e){ if(e==='ok') return '✓ Conciliado'; if(e==='tol') return '≈ Tolerado'; if(e==='diff_monto') return '≠ Dif. de Monto'; if(e==='solo_prov') return 'Solo en Proveedor'; return 'Solo en Sistema'; }
+  function estColor(e){ if(e==='ok'||e==='tol') return '#15803d'; if(e==='diff_monto') return '#b45309'; if(e==='solo_prov') return '#dc2626'; return '#475569'; }
 
   var bs='padding:7px 11px;border:1px solid #e2d5cb;vertical-align:middle;font-size:9.5pt;';
   var ms=bs+'font-family:Courier New,monospace;';
@@ -4986,6 +5105,7 @@ function exportProvXlsx(){
   var thR=thS+'text-align:right;';
 
   var thead='<tr>'+
+    '<th style="'+thS+'">Proveedor</th>'+
     '<th style="'+thS+'">N° Factura</th>'+
     '<th style="'+thS+'">Fecha Proveedor</th>'+
     '<th style="'+thR+'">Monto Proveedor</th>'+
@@ -4993,6 +5113,7 @@ function exportProvXlsx(){
     '<th style="'+thR+'">Monto e-Cont</th>'+
     '<th style="'+thR+'">Diferencia</th>'+
     '<th style="'+thS+'">Estado</th>'+
+    '<th style="'+thS+'">Observación</th>'+
   '</tr>';
 
   var rowsHtml=rows.map(function(r,i){
@@ -5008,6 +5129,7 @@ function exportProvXlsx(){
     }
     var estBadge='<span style="background:'+rowBg(r.estado)+';color:'+estColor(r.estado)+';padding:2px 8px;border-radius:4px;font-size:8.5pt;font-weight:700;border:1px solid '+estColor(r.estado)+'22">'+estLabel(r.estado)+'</span>';
     return '<tr>'+
+      '<td style="'+bc+'font-weight:600">'+escH(r.prov||'—')+'</td>'+
       '<td style="'+mc+'font-weight:600">'+escH(r.nroRaw)+'</td>'+
       '<td style="'+mc+'">'+escH(r.fechaProv||'—')+'</td>'+
       '<td style="'+rc+'">'+(r.montoProv!=null?'Gs. '+fmt(r.montoProv):'—')+'</td>'+
@@ -5015,6 +5137,7 @@ function exportProvXlsx(){
       '<td style="'+rc+'">'+(r.montoEcont!=null?'Gs. '+fmt(r.montoEcont):'—')+'</td>'+
       '<td style="'+rc+'">'+diffTxt+'</td>'+
       '<td style="'+bc+'">'+estBadge+'</td>'+
+      '<td style="'+bc+'font-size:8.5pt;color:'+(r.dup?'#dc2626':'#846f63')+'">'+pvObs(r)+'</td>'+
     '</tr>';
   }).join('');
 
@@ -5023,14 +5146,43 @@ function exportProvXlsx(){
     '<td style="'+sumBg+'font-weight:700;color:#9a3412;border-right:none">CONCILIACIÓN DE PROVEEDORES</td>'+
     '<td style="'+sumBg+'font-weight:700;color:#f97316;border-left:none">'+fmt2(rows.length)+' facturas procesadas</td>'+
     '<td style="width:24px"></td>'+
-    '<td style="'+sumBg+'color:#15803d">✓ Conciliadas</td><td style="'+sumBg+'font-weight:700;color:#15803d">'+fmt2(ok)+'</td>'+
+    '<td style="'+sumBg+'color:#15803d">✓ Conciliadas</td><td style="'+sumBg+'font-weight:700;color:#15803d">'+fmt2(ok)+(tolN?' (+'+tolN+' tol.)':'')+'</td>'+
     '<td style="width:12px"></td>'+
     '<td style="'+sumBg+'color:#b45309">≠ Dif. Monto</td><td style="'+sumBg+'font-weight:700;color:#b45309">'+fmt2(diffM)+'</td>'+
     '<td style="width:12px"></td>'+
     '<td style="'+sumBg+'color:#dc2626">✗ Sin cruce</td><td style="'+sumBg+'font-weight:700;color:#dc2626">'+fmt2(soloProv+soloEc)+'</td>'+
+    '<td style="width:12px"></td>'+
+    '<td style="'+sumBg+'color:#dc2626">⚠ Duplicados</td><td style="'+sumBg+'font-weight:700;color:#dc2626">'+fmt2(dups)+'</td>'+
     '<td style="width:24px"></td>'+
     '<td style="'+sumBg+'color:#6d28d9">Brecha total</td><td style="'+sumBg+'font-weight:700;color:#dc2626">Gs. '+fmt(Math.round(brecha))+'</td>'+
   '</tr></table>';
+
+  // Resumen por proveedor (solo si hay más de uno)
+  var provNames={};
+  rows.forEach(function(r){ if(r.prov&&r.prov!=='—') provNames[r.prov]=1; });
+  var provList=Object.keys(provNames);
+  var porProvHtml='';
+  if(provList.length>1){
+    var tdP=bs+'background:#faf6f2;';
+    porProvHtml='<p style="font-size:12pt;font-weight:700;color:#9a3412;margin:18px 0 8px">RESUMEN POR PROVEEDOR</p>'+
+      '<table style="border-collapse:collapse;margin-bottom:20px"><tr>'+
+        '<th style="'+thS+'">Proveedor</th><th style="'+thR+'">Facturas</th><th style="'+thR+'">Conciliadas</th><th style="'+thR+'">Dif. Monto</th><th style="'+thR+'">Sin cruce</th><th style="'+thR+'">Brecha (Gs.)</th>'+
+      '</tr>'+
+      provList.map(function(p){
+        var pr=rows.filter(function(r){return r.prov===p;});
+        var pok=pr.filter(function(r){return r.estado==='ok'||r.estado==='tol';}).length;
+        var pdif=pr.filter(function(r){return r.estado==='diff_monto';}).length;
+        var psc=pr.filter(function(r){return r.estado==='solo_prov';}).length;
+        var pbr=pr.filter(function(r){return r.estado!=='ok'&&r.estado!=='tol'&&r.diff!=null;}).reduce(function(a,r){return a+Math.abs(r.diff);},0);
+        return '<tr><td style="'+tdP+'font-weight:600">'+escH(p)+'</td>'+
+          '<td style="'+tdP+'text-align:right">'+pr.length+'</td>'+
+          '<td style="'+tdP+'text-align:right;color:#15803d;font-weight:700">'+pok+'</td>'+
+          '<td style="'+tdP+'text-align:right;color:#b45309;font-weight:700">'+pdif+'</td>'+
+          '<td style="'+tdP+'text-align:right;color:#dc2626;font-weight:700">'+psc+'</td>'+
+          '<td style="'+tdP+'text-align:right;font-family:Courier New;font-weight:700">'+fmt(Math.round(pbr))+'</td></tr>';
+      }).join('')+
+      '</table>';
+  }
 
   var html='<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'+
     '<head><meta charset="UTF-8"></head>'+
@@ -5038,6 +5190,7 @@ function exportProvXlsx(){
     '<p style="font-size:20pt;font-weight:700;color:#f97316;margin:0 0 4px">CONCILIACIÓN DE PROVEEDORES</p>'+
     '<p style="font-size:9pt;color:#846f63;margin:0 0 16px">'+dateStr+'</p>'+
     summaryHtml+
+    porProvHtml+
     '<table style="border-collapse:collapse;width:100%"><thead>'+thead+'</thead><tbody>'+rowsHtml+'</tbody></table>'+
     '<p style="margin-top:20px;font-size:8pt;color:#cbb8ae">Produced by Shift Consulting</p>'+
     '</body></html>';
@@ -5054,34 +5207,82 @@ function loadProvHist(){try{PV_HIST=JSON.parse(localStorage.getItem('concilia_pr
 function saveProvHist(){localStorage.setItem('concilia_prov_hist',JSON.stringify(PV_HIST));}
 loadProvHist();
 
-function saveToProvHist(results){
-  var today=new Date().toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'});
-  var idx=PV_HIST.findIndex(function(h){return h.date===today;});
-  var entry={date:today,ts:Date.now(),results:results};
-  if(idx>=0) PV_HIST[idx]=entry; else PV_HIST.unshift(entry);
+function saveToProvHist(results, provNames, tol){
+  var now=new Date();
+  var entry={
+    date:now.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'}),
+    hora:now.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}),
+    ts:now.getTime(),
+    proveedores:provNames||[],
+    tolerancia:tol||0,
+    results:results,
+    cloudId:null, por:null
+  };
+  PV_HIST.unshift(entry);   // cada ejecución = una entrada de auditoría (no se pisa)
   PV_HIST.sort(function(a,b){return b.ts-a.ts;});
   saveProvHist(); renderProvHist();
+  pvPushCloud(entry);
+}
+
+// ══ SINCRONIZACIÓN NUBE — REGISTRO DE AUDITORÍA ══
+async function pvPushCloud(entry){
+  var token=apiToken(); if(!token) return;
+  try{
+    var res=await fetch(API_BASE+'/v1/proveedores/history/save',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({date:entry.date,hora:entry.hora,ts:entry.ts,proveedores:entry.proveedores,tolerancia:entry.tolerancia,results:entry.results})
+    });
+    var j=await res.json();
+    if(j.cloud_id){ entry.cloudId=j.cloud_id; entry.por=j.ejecutado_por||null; saveProvHist(); renderProvHist(); }
+  }catch(e){ console.log('[pv sync save]',e); }
+}
+
+async function pvPullCloud(){
+  var token=apiToken(); if(!token) return;
+  try{
+    var res=await fetch(API_BASE+'/v1/proveedores/history',{headers:{'Authorization':'Bearer '+token}});
+    if(!res.ok) return;
+    var list=await res.json();
+    var changed=false;
+    list.forEach(function(e){
+      if(PV_HIST.some(function(h){return h.cloudId===e.cloud_id;})) return;
+      PV_HIST.push({
+        date:e.date||new Date(e.fecha_ejecucion).toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'}),
+        hora:e.hora||'', ts:e.ts||Date.parse(e.fecha_ejecucion)||0,
+        proveedores:e.proveedores||[], tolerancia:e.tolerancia||0,
+        results:e.results||[], cloudId:e.cloud_id, por:e.ejecutado_por||null
+      });
+      changed=true;
+    });
+    if(changed){ PV_HIST.sort(function(a,b){return b.ts-a.ts;}); saveProvHist(); renderProvHist(); }
+  }catch(e){ console.log('[pv sync pull]',e); }
 }
 
 function renderProvHist(){
   var list=document.getElementById('pv-hist-list'); if(!list) return;
   if(!PV_HIST.length){
-    list.innerHTML='<div class="empty-hist"><span class="empty-icon">📁</span><div class="empty-title">Sin conciliaciones históricas</div><div class="empty-sub">Los cruces de proveedores se archivan aquí automáticamente.</div></div>';
+    list.innerHTML='<div class="empty-hist"><span class="empty-icon">📁</span><div class="empty-title">Sin ejecuciones registradas</div><div class="empty-sub">Cada cruce queda archivado aquí con fecha, hora y usuario.</div></div>';
     return;
   }
   list.innerHTML=PV_HIST.map(function(h,i){
-    var ok=h.results.filter(function(r){return r.estado==='ok';}).length;
+    var ok=h.results.filter(function(r){return r.estado==='ok'||r.estado==='tol';}).length;
     var diff=h.results.filter(function(r){return r.estado==='diff_monto';}).length;
     var miss=h.results.filter(function(r){return r.estado==='solo_prov'||r.estado==='solo_econt';}).length;
+    var dups=h.results.filter(function(r){return r.dup;}).length;
+    var provTxt=(h.proveedores&&h.proveedores.length)?h.proveedores.slice(0,3).join(', ')+(h.proveedores.length>3?' +'+(h.proveedores.length-3):''):'';
     return '<div class="dc">'+
       '<div class="dc-hd" onclick="togglePVDay('+i+')">'+
-        '<span class="dc-date">'+h.date+'</span>'+
+        '<span class="dc-date">'+h.date+(h.hora?' <span style="font-size:11px;color:var(--tx3)">'+h.hora+'</span>':'')+'</span>'+
         '<span class="dc-sys">'+
+          (provTxt?'<span style="font-size:11px;color:var(--tx2);margin-right:8px">'+escH(provTxt)+'</span>':'')+
           '<span class="dpill di">'+ok+' OK</span>'+
-          (diff?'<span class="dpill dp2">'+diff+' dif. monto</span>':'')+
-          (miss?'<span class="dpill" style="background:var(--redb);color:var(--red);">'+miss+' sin cruce</span>':'')+
+          (diff?'<span class="dpill dp2">'+diff+' dif.</span>':'')+
+          (miss?'<span class="dpill" style="background:var(--redb);color:var(--red);">'+miss+' s/cruce</span>':'')+
+          (dups?'<span class="dpill" style="background:var(--redb);color:var(--red);">⚠'+dups+'</span>':'')+
+          (h.cloudId?'<span class="dpill" style="background:var(--tealb);color:var(--teal)" title="Sincronizado en la nube">☁</span>':'')+
         '</span>'+
-        '<span class="dc-stat '+(diff+miss===0?'ok2':'err2')+'">'+(diff+miss===0?'✓ Todo cuadrado':(diff+miss)+' por resolver')+'</span>'+
+        '<span class="dc-stat '+(diff+miss===0?'ok2':'err2')+'">'+(h.por?escH(h.por.split('@')[0]):'')+(diff+miss===0?' ✓':' · '+(diff+miss)+' por resolver')+'</span>'+
         '<span class="dc-chev" id="pv-arr-'+i+'">▼</span>'+
       '</div>'+
       '<div class="dc-body" id="pv-body-'+i+'">'+
@@ -5101,9 +5302,14 @@ function togglePVDay(i){var b=document.getElementById('pv-body-'+i);var a=docume
 function viewPVDay(i){PV.results=PV_HIST[i].results;PV.filtered=PV_HIST[i].results;PV.page=1;document.getElementById('pv-legend').classList.add('show');document.getElementById('pv-table-wrap').style.display='block';renderProvTbl();window.scrollTo({top:0,behavior:'smooth'});}
 function exportPVDay(i){var saved=PV.filtered;PV.filtered=PV_HIST[i].results;exportProvXlsx();PV.filtered=saved;}
 function delPVDay(i){
-  customConfirm('Eliminar conciliación','¿Eliminar el cruce del '+PV_HIST[i].date+'?').then(function(ok){
+  customConfirm('Eliminar registro','¿Eliminar la ejecución del '+PV_HIST[i].date+' '+(PV_HIST[i].hora||'')+' del registro de auditoría?').then(function(ok){
     if(!ok) return;
-    PV_HIST.splice(i,1);saveProvHist();renderProvHist();showToast('Entrada eliminada del historial');
+    var entry=PV_HIST[i];
+    if(entry.cloudId){
+      var token=apiToken();
+      if(token) fetch(API_BASE+'/v1/history/'+entry.cloudId,{method:'DELETE',headers:{'Authorization':'Bearer '+token}}).catch(function(){});
+    }
+    PV_HIST.splice(i,1);saveProvHist();renderProvHist();showToast('Registro eliminado');
   });
 }
 function clearProvHist(){
@@ -5114,26 +5320,32 @@ function clearProvHist(){
 }
 
 function injectProvDemoAndRun(){
-  customConfirm('Datos Demo','¿Cargar facturas ficticias de proveedor y e-Cont para demostrar el módulo?').then(function(ok){
+  customConfirm('Datos Demo','¿Cargar un lote ficticio de 2 proveedores + e-Cont para demostrar todos los controles (diferencias, tolerancia, duplicados, sufijos)?').then(function(ok){
     if(!ok) return;
-    PV.provRows=[
-      {nro:'1001',nroRaw:'001-001-0001001',fecha:'01/06/2026',monto:1500000},
-      {nro:'1002',nroRaw:'001-001-0001002',fecha:'05/06/2026',monto:2300000},
-      {nro:'1003',nroRaw:'001-001-0001003',fecha:'10/06/2026',monto:875000},
-      {nro:'1004',nroRaw:'001-001-0001004',fecha:'15/06/2026',monto:4100000},
-      {nro:'1005',nroRaw:'001-001-0001005',fecha:'20/06/2026',monto:650000},
-    ];
+    PV.provFiles=[];
+    pvUpsertFile({name:'demo_distribuidora.xlsx', tipo:'Excel', proveedor:'DISTRIBUIDORA GUARANÍ S.A.', ruc:'80012345-6', rows:[
+      {nro:normNroFactura('001-001-0001001'),nroRaw:'001-001-0001001',fecha:'01/06/2026',monto:1500000},
+      {nro:normNroFactura('001-001-0001002'),nroRaw:'001-001-0001002',fecha:'05/06/2026',monto:2300000},
+      {nro:normNroFactura('001-001-0001003'),nroRaw:'001-001-0001003',fecha:'10/06/2026',monto:875000},
+      {nro:normNroFactura('001-001-0001003'),nroRaw:'001-001-0001003',fecha:'10/06/2026',monto:875000},
+      {nro:normNroFactura('001-001-0001004'),nroRaw:'001-001-0001004',fecha:'15/06/2026',monto:4100000}
+    ]});
+    pvUpsertFile({name:'demo_importadora.pdf', tipo:'PDF', proveedor:'IMPORTADORA DEL ESTE S.R.L.', ruc:'80098765-4', rows:[
+      {nro:normNroFactura('2005001'),nroRaw:'2005001',fecha:'12/06/2026',monto:1200000},
+      {nro:normNroFactura('2005002'),nroRaw:'2005002',fecha:'18/06/2026',monto:760050}
+    ]});
     PV.econtRows=[
-      {nro:'1001',nroRaw:'001-001-0001001',fecha:'01/06/2026',monto:1500000},
-      {nro:'1002',nroRaw:'001-001-0001002',fecha:'05/06/2026',monto:2250000},
-      {nro:'1003',nroRaw:'001-001-0001003',fecha:'10/06/2026',monto:875000},
-      {nro:'1006',nroRaw:'001-001-0001006',fecha:'22/06/2026',monto:990000},
+      {nro:normNroFactura('001-001-0001001'),nroRaw:'001-001-0001001',fecha:'01/06/2026',monto:1500000},
+      {nro:normNroFactura('001-001-0001002'),nroRaw:'001-001-0001002',fecha:'05/06/2026',monto:2250000},
+      {nro:normNroFactura('001-001-0001003'),nroRaw:'001-001-0001003',fecha:'10/06/2026',monto:875000},
+      {nro:normNroFactura('003-001-2005001'),nroRaw:'003-001-2005001',fecha:'12/06/2026',monto:1200000},
+      {nro:normNroFactura('2005002'),nroRaw:'2005002',fecha:'18/06/2026',monto:760000},
+      {nro:normNroFactura('001-001-0001006'),nroRaw:'001-001-0001006',fecha:'22/06/2026',monto:990000}
     ];
-    PV.provLoaded=true; PV.econtLoaded=true;
-    var bp=document.getElementById('b-pv-prov');
+    PV.econtLoaded=true;
     var be=document.getElementById('b-pv-econt');
-    bp.classList.add('ok'); bp.textContent='✓ Demo Proveedor (5 facturas)';
-    be.classList.add('ok'); be.textContent='✓ Demo e-Cont (4 registros)';
+    be.classList.add('ok'); be.textContent='✓ Demo e-Cont (6 registros)';
+    document.getElementById('pv-tol').value=100;
     checkProvRun();
     runProveedores();
   });

@@ -363,6 +363,7 @@ async def obtener_historial(current_user: User = Depends(get_current_user)):
         statement = (
             select(ReconciliationHistory)
             .where(ReconciliationHistory.user_email == current_user.email)
+            .where(ReconciliationHistory.empresa != "Proveedores")
             .order_by(ReconciliationHistory.fecha_ejecucion.desc())
         )
         resultados = session.exec(statement).all()
@@ -402,6 +403,51 @@ async def eliminar_historial(entry_id: int, current_user: User = Depends(get_cur
         session.delete(entrada)
         session.commit()
         return {"status": "deleted"}
+
+
+# ═════════════════════════════════════════════════════════════════════
+# CONCILIACIÓN DE PROVEEDORES — historial + registro de auditoría
+# Reusa ReconciliationHistory con empresa="Proveedores"
+# ═════════════════════════════════════════════════════════════════════
+
+@app.get("/v1/proveedores/history")
+async def obtener_historial_proveedores(current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        statement = (
+            select(ReconciliationHistory)
+            .where(ReconciliationHistory.user_email == current_user.email)
+            .where(ReconciliationHistory.empresa == "Proveedores")
+            .order_by(ReconciliationHistory.fecha_ejecucion.desc())
+        )
+        resultados = session.exec(statement).all()
+        out = []
+        for r in resultados:
+            try:
+                data = json.loads(r.resumen_json)
+            except Exception:
+                data = {}
+            out.append({
+                "cloud_id": r.id,
+                "fecha_ejecucion": r.fecha_ejecucion.isoformat(),
+                "ejecutado_por": r.user_email,
+                **data,
+            })
+        return out
+
+
+@app.post("/v1/proveedores/history/save")
+async def guardar_historial_proveedores(request: Request, current_user: User = Depends(get_current_user)):
+    body = await request.json()
+    with Session(engine) as session:
+        entrada = ReconciliationHistory(
+            user_email=current_user.email,
+            resumen_json=json.dumps(body, ensure_ascii=False),
+            empresa="Proveedores",
+        )
+        session.add(entrada)
+        session.commit()
+        session.refresh(entrada)
+        return {"cloud_id": entrada.id, "status": "saved", "ejecutado_por": current_user.email}
 
 
 # ═════════════════════════════════════════════════════════════════════
