@@ -15,3 +15,4 @@ numpy==2.4.4
 requests==2.33.1
 python-dateutil==2.9.0.post0
 alembic==1.18.4
+anthropic>=0.69.0

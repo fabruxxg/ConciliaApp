@@ -451,6 +451,143 @@ async def guardar_historial_proveedores(request: Request, current_user: User = D
 
 
 # ═════════════════════════════════════════════════════════════════════
+# EXTRACCIÓN DE FACTURAS CON IA (visión) — Claude Opus 4.8
+# Fallback cuando el OCR del navegador no logra leer una imagen/PDF.
+# Requiere ANTHROPIC_API_KEY en las variables de entorno (Render).
+# ═════════════════════════════════════════════════════════════════════
+
+# Modelo configurable por env; por defecto el más capaz (Opus 4.8).
+PROV_EXTRACT_MODEL = os.getenv("PROV_EXTRACT_MODEL", "claude-opus-4-8")
+_anthropic_client = None
+
+def _get_anthropic():
+    """Cliente Anthropic perezoso. Devuelve None si falta la API key o el paquete."""
+    global _anthropic_client
+    if _anthropic_client is not None:
+        return _anthropic_client
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return None
+    try:
+        import anthropic
+    except Exception:
+        return None
+    _anthropic_client = anthropic.Anthropic()
+    return _anthropic_client
+
+def _prov_media_type(filename: str, content_type: str) -> Optional[str]:
+    allowed = {"image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"}
+    if content_type in allowed:
+        return content_type
+    ext = (filename or "").lower().rsplit(".", 1)[-1]
+    return {
+        "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "webp": "image/webp", "gif": "image/gif", "pdf": "application/pdf",
+    }.get(ext)
+
+_PROV_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "proveedor": {"type": "string", "description": "Nombre del proveedor. '' si no aparece."},
+        "ruc": {"type": "string", "description": "RUC del proveedor (ej 80012345-6). '' si no aparece."},
+        "facturas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "nro": {"type": "string", "description": "Número de comprobante/factura completo, tal cual aparece (ej 001-001-0001234)."},
+                    "monto": {"type": "integer", "description": "Importe de ESA factura en guaraníes, entero sin separadores de miles. Negativo si es nota de crédito."},
+                    "fecha": {"type": "string", "description": "Fecha en formato DD/MM/AAAA. '' si no aparece."},
+                },
+                "required": ["nro", "monto", "fecha"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["proveedor", "ruc", "facturas"],
+    "additionalProperties": False,
+}
+
+_PROV_PROMPT = (
+    "Sos un asistente contable en Paraguay. Extraé TODAS las facturas/comprobantes de este "
+    "documento de un proveedor (puede ser un estado de cuenta, listado o factura).\n"
+    "Reglas:\n"
+    "- 'nro': el número de comprobante COMPLETO tal como aparece (formato típico 001-001-0001234).\n"
+    "- 'monto': el importe de ESA factura en guaraníes, como entero sin puntos ni comas. Si es una "
+    "columna de estado de cuenta, usá el importe/debe de la fila, NO el saldo acumulado. Notas de "
+    "crédito o haberes van con monto negativo.\n"
+    "- 'fecha': DD/MM/AAAA si está; si no, cadena vacía.\n"
+    "- 'proveedor' y 'ruc': completá si aparecen en el encabezado; si no, cadena vacía.\n"
+    "No inventes datos: si el documento no tiene facturas, devolvé 'facturas' vacío. "
+    "Devolvé únicamente lo que puedas leer con confianza."
+)
+
+@app.post("/v1/proveedores/extract")
+async def extraer_facturas_ia(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Extrae facturas de una imagen o PDF de proveedor usando Claude (visión)."""
+    client = _get_anthropic()
+    if client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Extracción con IA no disponible: falta configurar ANTHROPIC_API_KEY en el servidor.",
+        )
+
+    media_type = _prov_media_type(file.filename, file.content_type)
+    if media_type is None:
+        raise HTTPException(status_code=400, detail="Formato no soportado (usá PDF, JPG, PNG o WEBP).")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Archivo vacío.")
+    data_b64 = _b64.b64encode(raw).decode("utf-8")
+
+    if media_type == "application/pdf":
+        media_block = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": data_b64}}
+    else:
+        media_block = {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data_b64}}
+
+    try:
+        resp = client.messages.create(
+            model=PROV_EXTRACT_MODEL,
+            max_tokens=8000,
+            messages=[{"role": "user", "content": [media_block, {"type": "text", "text": _PROV_PROMPT}]}],
+            output_config={"format": {"type": "json_schema", "schema": _PROV_SCHEMA}},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error del motor de IA: {str(e)}")
+
+    if getattr(resp, "stop_reason", None) == "refusal":
+        raise HTTPException(status_code=422, detail="La IA no pudo procesar este documento.")
+
+    text = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        raise HTTPException(status_code=502, detail="La IA devolvió una respuesta no interpretable.")
+
+    facturas = parsed.get("facturas") or []
+    rows = []
+    for f in facturas:
+        nro = str(f.get("nro", "")).strip()
+        if not nro:
+            continue
+        try:
+            monto = int(f.get("monto") or 0)
+        except Exception:
+            monto = 0
+        rows.append({"nro": nro, "monto": monto, "fecha": str(f.get("fecha", "")).strip()})
+
+    return {
+        "proveedor": str(parsed.get("proveedor", "")).strip(),
+        "ruc": str(parsed.get("ruc", "")).strip(),
+        "rows": rows,
+        "modelo": PROV_EXTRACT_MODEL,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════
 # 5. CONCILIACIÓN SERVER-SIDE (motores Python protegidos)
 # ═════════════════════════════════════════════════════════════════════
 

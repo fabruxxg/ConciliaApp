@@ -4652,9 +4652,22 @@ function detectCol(headers, keywords) {
   return -1;
 }
 
+// Montos en Guaraníes (enteros). Tolera . , y espacio como separador de miles;
+// descarta una cola decimal de 1-2 dígitos (centavos) sólo si hay miles antes.
 function parseMonto(s){
-  var n = String(s||'0').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.');
-  return parseFloat(n)||0;
+  if(s==null) return 0;
+  var str=String(s);
+  var neg=/^\s*[-(]/.test(str) || /-\s*$/.test(str); // -123, (123) o 123-  (notas de crédito)
+  var t=str.replace(/[^\d.,]/g,'');
+  if(!t) return 0;
+  var lastSep=Math.max(t.lastIndexOf('.'), t.lastIndexOf(','));
+  if(lastSep>=0){
+    var tail=t.slice(lastSep+1), head=t.slice(0,lastSep);
+    var sepsInHead=(head.match(/[.,]/g)||[]).length;
+    if(tail.length<=2 && sepsInHead>=1) t=head; // descarta centavos
+  }
+  var n=parseInt(t.replace(/[.,]/g,''),10)||0;
+  return neg? -n : n;
 }
 
 function loadProvFile(input){
@@ -4726,51 +4739,202 @@ function loadPdfJs(){
   });
 }
 
-// Parser de texto libre (OCR o PDF): detecta facturas, montos y fechas línea por línea
-function parseProvText(text){
-  var rows=[]; var seen={};
-  var reFacFull=/\b(\d{3}-\d{3}-\d{5,8})\b/;
-  var reFecha=/\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/;
-  var reMonto=/\b\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?\b/g;
-  text.split(/\r?\n/).forEach(function(line){
-    var nroRaw=null;
-    var fm=line.match(reFacFull);
-    if(fm){ nroRaw=fm[1]; }
-    else {
-      // línea con número corto de factura + al menos un monto con separador de miles
-      var montoTest=line.match(reMonto);
-      var sm=line.replace(reFecha,'').match(/\b(\d{5,10})\b/);
-      if(sm&&montoTest) nroRaw=sm[1];
-    }
+// Corrige confusiones típicas de OCR (O→0, l/I→1, S→5, B→8, Z→2) SÓLO en tokens mayormente numéricos
+function pvFixOcrDigits(tok){
+  var d=(tok.match(/\d/g)||[]).length, a=(tok.match(/[A-Za-z]/g)||[]).length;
+  if(d>=2 && d>=a){
+    return tok.replace(/[Oo]/g,'0').replace(/[lI]/g,'1').replace(/\|/g,'1')
+              .replace(/S/g,'5').replace(/B/g,'8').replace(/Z/g,'2');
+  }
+  return tok;
+}
+
+// Tokens que parecen dinero en una línea, ordenados por posición. sep=true si trae separador de miles.
+function pvMoneyTokens(s){
+  var found=[], m;
+  var reSep=/\d{1,3}(?:[.\s,]\d{3})+(?:[.,]\d{1,2})?/g;
+  while((m=reSep.exec(s))!==null) found.push({v:m[0], i:m.index, j:m.index+m[0].length, sep:true});
+  var reBare=/\d{4,}/g;
+  while((m=reBare.exec(s))!==null){
+    var a=m.index,b=a+m[0].length,ov=false;
+    for(var k=0;k<found.length;k++){ if(a<found[k].j&&b>found[k].i){ov=true;break;} }
+    if(!ov) found.push({v:m[0], i:a, j:b, sep:false});
+  }
+  found.sort(function(x,y){return x.i-y.i;});
+  return found;
+}
+
+// Parser de texto libre robusto (OCR o PDF sin coordenadas): tolera guiones/espacios/OCR,
+// montos con o sin separador, y no exige que N° y monto estén en la misma "línea" perfecta.
+function parseProvText(text){ return pvRowsFromLines(String(text||'').split(/\r?\n/)); }
+function pvRowsFromLines(lines){
+  var rows=[], seen={};
+  var reFecha=/\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}\b/;
+  var reFull=/(\d{1,4})[\s.\-]+(\d{1,4})[\s.\-]+(\d{4,9})/; // último grupo 4-9 dígitos distingue factura de monto (miles = grupos de 3)
+  lines.forEach(function(rawLine){
+    var line=String(rawLine||'').replace(/\t/g,' ').replace(/\s{2,}/g,' ').trim();
+    if(!line) return;
+    var norm=line.replace(/[‐-―−]/g,'-');
+    norm=norm.split(' ').map(pvFixOcrDigits).join(' ');
+    var isRuc=/\bruc\b/i.test(norm);
+    var fecha=''; var fm=norm.match(reFecha); if(fm) fecha=fm[0];
+    var work=norm.replace(reFecha,' ');
+    var nroRaw=null, full=work.match(reFull);
+    if(full){ nroRaw=full[1]+'-'+full[2]+'-'+full[3]; work=work.replace(full[0],' '); }
+    else if(!isRuc){ var sm=work.match(/\b(\d{5,11})\b/); if(sm){ nroRaw=sm[1]; work=work.replace(sm[0],' '); } }
     if(!nroRaw) return;
     var key=normNroFactura(nroRaw);
-    if(seen[key]) return;
+    if(!key||seen[key]) return;
+    var money=pvMoneyTokens(work);
+    if(!money.length) return;
+    var sepTokens=money.filter(function(x){return x.sep;});
+    var amount = sepTokens.length ? parseMonto(sepTokens[sepTokens.length-1].v)
+                                  : Math.max.apply(null, money.map(function(x){return parseMonto(x.v);}));
     seen[key]=1;
-    var montos=line.match(reMonto)||[];
-    var monto=montos.length?parseMonto(montos[montos.length-1]):0;
-    var f=line.match(reFecha);
-    rows.push({nro:key,nroRaw:nroRaw,fecha:f?f[1]:'',monto:monto});
+    rows.push({nro:key,nroRaw:nroRaw,fecha:fecha,monto:amount});
   });
   return rows;
 }
 
-// OCR de una imagen (File, URL o canvas) → texto
-async function pvOcr(source, onProgress){
-  await loadTesseract();
-  var res=await Tesseract.recognize(source,'spa',{
-    logger:function(m){
-      if(m.status==='recognizing text'&&onProgress) onProgress(Math.round(m.progress*100));
-    }
+// Extractor POSICIONAL: recibe tokens {str,x,y} (de pdf.js getTextContent o de las cajas del OCR),
+// reconstruye filas por Y, detecta columnas por encabezado y elige la columna de monto correcta
+// (ignora "Saldo/Haber/etc."). Si no hay encabezado reconocible, cae al parser heurístico.
+function pvRowsFromTokens(tokens){
+  if(!tokens||!tokens.length) return [];
+  var toks=tokens.filter(function(t){return t&&String(t.str).trim();})
+                 .map(function(t){return {s:String(t.str).trim(), x:+t.x||0, y:+t.y||0};});
+  toks.sort(function(a,b){ return a.y-b.y || a.x-b.x; });
+  var lines=[], cur=null, curY=null, tol=6;
+  toks.forEach(function(t){
+    if(cur===null || Math.abs(t.y-curY)>tol){ cur={y:t.y, items:[]}; lines.push(cur); curY=t.y; }
+    cur.items.push(t);
   });
-  return res.data.text||'';
+  lines.forEach(function(l){ l.items.sort(function(a,b){return a.x-b.x;}); });
+  var det=pvDetectColumns(lines);
+  if(det) return pvRowsByColumns(lines, det);
+  return pvRowsFromLines(lines.map(function(l){ return l.items.map(function(t){return t.s;}).join(' '); }));
+}
+function pvDetectColumns(lines){
+  var nroKeys=['factura','comprobante','numero','número','nro','timbrado','n°','nº','doc'];
+  var montoKeys=['importe','monto','total','debe','valor','subtotal'];
+  var fechaKeys=['fecha','emision','emisión'];
+  var otherKeys=['saldo','balance','haber','credito','crédito','iva','ret','concepto','detalle','descrip','gravad','exenta'];
+  for(var i=0;i<lines.length;i++){
+    var cols=[], hasNro=false, hasMonto=false;
+    lines[i].items.forEach(function(t){
+      var low=t.s.toLowerCase(), role=null;
+      if(nroKeys.some(function(k){return low.indexOf(k)>=0;})) role='nro';
+      else if(fechaKeys.some(function(k){return low.indexOf(k)>=0;})) role='fecha';
+      else if(montoKeys.some(function(k){return low.indexOf(k)>=0;})) role='monto';
+      else if(otherKeys.some(function(k){return low.indexOf(k)>=0;})) role='other';
+      if(!role) return;
+      if(role==='nro'){ if(hasNro) role='other'; else hasNro=true; }
+      if(role==='monto'){ if(hasMonto) role='other'; else hasMonto=true; }
+      cols.push({x:t.x, role:role});
+    });
+    if(hasNro && hasMonto) return {cols:cols, headerIdx:i};
+  }
+  return null;
+}
+function pvRowsByColumns(lines, det){
+  var cols=det.cols, rows=[], seen={};
+  for(var i=det.headerIdx+1;i<lines.length;i++){
+    var b={nro:[],monto:[],fecha:[]};
+    lines[i].items.forEach(function(t){
+      var best=null,bd=1e9;
+      cols.forEach(function(c){ var d=Math.abs(t.x-c.x); if(d<bd){bd=d;best=c;} });
+      if(best && b[best.role]) b[best.role].push(t.s);
+    });
+    var nroStr=b.nro.join(' ').split(' ').map(pvFixOcrDigits).join(' ');
+    var full=nroStr.match(/(\d{1,4})[\s.\-]+(\d{1,4})[\s.\-]+(\d{4,9})/);
+    var nroRaw= full? (full[1]+'-'+full[2]+'-'+full[3]) : (nroStr.match(/\d{5,}/)||[''])[0];
+    if(!nroRaw) continue;
+    var key=normNroFactura(nroRaw); if(!key||seen[key]) continue;
+    var fechaStr=(b.fecha.join(' ').match(/\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}/)||[''])[0];
+    var monto=parseMonto(b.monto.join(' '));
+    seen[key]=1;
+    rows.push({nro:key,nroRaw:nroRaw,fecha:fechaStr,monto:monto});
+  }
+  return rows;
 }
 
-// PDF escaneado → renderizar páginas a canvas → OCR
-async function pvOcrPdfBytes(bytes, statusEl){
+// Preprocesa una imagen para OCR: reescala si es chica + escala de grises + leve contraste
+function pvToCanvas(url){
+  return new Promise(function(resolve,reject){
+    var img=new Image();
+    img.onload=function(){
+      var w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+      if(!w||!h){ reject(new Error('imagen vacía')); return; }
+      var scale=w<1400?Math.min(2.5, 1600/w):1;
+      var cw=Math.round(w*scale), ch=Math.round(h*scale);
+      var c=document.createElement('canvas'); c.width=cw; c.height=ch;
+      var ctx=c.getContext('2d'); ctx.drawImage(img,0,0,cw,ch);
+      try{
+        var im=ctx.getImageData(0,0,cw,ch), d=im.data;
+        for(var i=0;i<d.length;i+=4){
+          var g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+          g=(g-128)*1.18+128; if(g<0)g=0; if(g>255)g=255;
+          d[i]=d[i+1]=d[i+2]=g;
+        }
+        ctx.putImageData(im,0,0);
+      }catch(e){}
+      resolve(c);
+    };
+    img.onerror=function(){ reject(new Error('no se pudo cargar la imagen')); };
+    img.src=url;
+  });
+}
+
+// OCR → devuelve el objeto data completo (incluye texto y, si están, cajas de palabras)
+async function pvOcrData(source, onProgress){
+  await loadTesseract();
+  var res=await Tesseract.recognize(source,'spa',{
+    logger:function(m){ if(m.status==='recognizing text'&&onProgress) onProgress(Math.round(m.progress*100)); }
+  });
+  return res.data||{};
+}
+// Compat: sólo el texto
+function pvOcr(source, onProgress){ return pvOcrData(source,onProgress).then(function(d){return d.text||'';}); }
+
+// Convierte las cajas de palabras de Tesseract en tokens {str,x,y} (soporta v4 y v5)
+function pvWordsToTokens(data, yOffset){
+  yOffset=yOffset||0; var out=[];
+  function push(w){ if(w&&w.text&&w.text.trim()&&w.bbox){ out.push({str:w.text, x:w.bbox.x0, y:w.bbox.y0+yOffset}); } }
+  if(data.words&&data.words.length){ data.words.forEach(push); return out; }
+  (data.blocks||[]).forEach(function(bl){
+    (bl.paragraphs||[]).forEach(function(pa){
+      (pa.lines||[]).forEach(function(ln){ (ln.words||[]).forEach(push); });
+    });
+  });
+  return out;
+}
+
+// PDF con texto embebido → tokens POSICIONALES vía pdf.js getTextContent (coordenadas reales)
+async function pvPdfTokens(bytes, statusEl){
+  await loadPdfJs();
+  var pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes)}).promise;
+  var maxPages=Math.min(pdf.numPages,20), tokens=[];
+  for(var p=1;p<=maxPages;p++){
+    if(statusEl) statusEl.textContent='⏳ Leyendo texto — página '+p+'/'+maxPages+'…';
+    var page=await pdf.getPage(p);
+    var vp=page.getViewport({scale:1});
+    var tc=await page.getTextContent();
+    var off=(p-1)*100000;
+    tc.items.forEach(function(it){
+      var s=(it.str||'').trim(); if(!s) return;
+      var tr=it.transform;
+      tokens.push({str:s, x:tr[4], y:(vp.height - tr[5])+off});
+    });
+  }
+  return tokens;
+}
+
+// PDF escaneado → renderizar páginas a canvas → OCR (texto + tokens posicionales)
+async function pvOcrPdfData(bytes, statusEl){
   await loadPdfJs();
   var pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes)}).promise;
   var maxPages=Math.min(pdf.numPages,8);
-  var fullText='';
+  var fullText='', tokens=[];
   for(var p=1;p<=maxPages;p++){
     if(statusEl) statusEl.textContent='⏳ OCR página '+p+'/'+maxPages+'…';
     var page=await pdf.getPage(p);
@@ -4778,12 +4942,13 @@ async function pvOcrPdfBytes(bytes, statusEl){
     var canvas=document.createElement('canvas');
     canvas.width=viewport.width; canvas.height=viewport.height;
     await page.render({canvasContext:canvas.getContext('2d'),viewport:viewport}).promise;
-    fullText+=await pvOcr(canvas,function(pct){
+    var data=await pvOcrData(canvas,function(pct){
       if(statusEl) statusEl.textContent='⏳ OCR página '+p+'/'+maxPages+' — '+pct+'%';
     });
-    fullText+='\n';
+    fullText+=(data.text||'')+'\n';
+    tokens=tokens.concat(pvWordsToTokens(data,(p-1)*100000));
   }
-  return fullText;
+  return {text:fullText, tokens:tokens};
 }
 
 // Resultado parseado → alta en lote + toast
@@ -4793,6 +4958,45 @@ function pvApplyParsedRows(rows, text, file, tipo, previewUrl){
   showToast('✓ ['+info.nombre+'] '+rows.length+' facturas leídas automáticamente ('+tipo+')');
 }
 
+// Extracción con IA (Claude visión) vía backend — último recurso cuando el OCR local no lee nada
+async function pvAiExtract(file, statusEl){
+  var token = apiToken();
+  if(!token) throw new Error('sesión no iniciada');
+  if(statusEl) statusEl.textContent='⏳ '+file.name+' — leyendo con IA…';
+  var fd=new FormData(); fd.append('file', file, file.name);
+  var res=await fetch(API_BASE+'/v1/proveedores/extract',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
+  if(!res.ok){
+    if(res.status===503) throw new Error('IA no configurada en el servidor');
+    var d=null; try{ d=await res.json(); }catch(e){}
+    throw new Error((d&&d.detail)||('error '+res.status));
+  }
+  var data=await res.json();
+  var rows=(data.rows||[]).map(function(r){
+    var raw=String(r.nro||'').trim();
+    return {nro:normNroFactura(raw), nroRaw:raw, fecha:String(r.fecha||''), monto:parseMonto(r.monto)};
+  }).filter(function(r){return r.nro;});
+  return {rows:rows, proveedor:data.proveedor||'', ruc:data.ruc||''};
+}
+
+// OCR local no sacó filas → probar IA; si tampoco, recién ahí carga manual
+async function pvFallbackAIorManual(file, text, tipo, previewUrl, statusEl){
+  try{
+    var ai=await pvAiExtract(file, statusEl);
+    if(statusEl) statusEl.textContent='↑ Cargar archivo(s) del Proveedor';
+    if(ai && ai.rows.length){
+      pvUpsertFile({name:file.name, tipo:tipo+'·IA', proveedor:ai.proveedor||detectProveedorInfo(text,file.name).nombre, ruc:ai.ruc||'', rows:ai.rows, previewUrl:previewUrl||null});
+      showToast('✓ ['+(ai.proveedor||'proveedor')+'] '+ai.rows.length+' facturas leídas con IA');
+      return;
+    }
+    showToast('⚠ '+file.name+': la IA no encontró facturas — revisá/cargá manualmente');
+  }catch(err){
+    if(statusEl) statusEl.textContent='↑ Cargar archivo(s) del Proveedor';
+    showToast('⚠ IA: '+err.message+' — cargá manualmente');
+  }
+  pvUpsertFile({name:file.name, tipo:tipo, proveedor:detectProveedorInfo(text,file.name).nombre, ruc:'', rows:[], previewUrl:previewUrl||null});
+  pvEditFile(PV.provFiles[PV.provFiles.length-1].id);
+}
+
 function loadProvPdf(file){
   return new Promise(function(resolve){
     var reader=new FileReader();
@@ -4800,29 +5004,34 @@ function loadProvPdf(file){
       var el=document.getElementById('b-pv-prov');
       try{
         var bytes=new Uint8Array(e.target.result);
-        // 1) Intento rápido: PDF con texto embebido
-        var items=extractPdfItems(bytes);
-        var text=items.join('\n');
-        var rows=parseProvText(text);
-        if(!rows.length&&items.length){ text=items.join(' '); rows=parseProvText(text); }
+        // 1) PDF con texto embebido — extracción POSICIONAL (pdf.js con coordenadas)
+        var rows=[], text='';
+        try{
+          var ptoks=await pvPdfTokens(bytes, el);
+          if(ptoks.length){ rows=pvRowsFromTokens(ptoks); text=ptoks.map(function(t){return t.str;}).join(' '); }
+        }catch(e1){}
+        // 1b) Respaldo: extractor de texto plano legado
+        if(!rows.length){
+          var items=extractPdfItems(bytes);
+          if(items.length){ text=items.join('\n'); rows=parseProvText(text); if(!rows.length){ text=items.join(' '); rows=parseProvText(text); } }
+        }
         if(rows.length){
           pvApplyParsedRows(rows, text, file, 'PDF');
           el.textContent='↑ Cargar archivo(s) del Proveedor';
           resolve(); return;
         }
-        // 2) PDF escaneado (imagen adentro) → OCR automático
+        // 2) PDF escaneado (imagen adentro) → OCR automático (posicional si hay cajas)
         el.textContent='⏳ '+file.name+' — OCR…';
         showToast('⏳ '+file.name+': PDF sin texto — aplicando OCR automático…');
-        var ocrText=await pvOcrPdfBytes(bytes, el);
-        rows=parseProvText(ocrText);
+        var od=await pvOcrPdfData(bytes, el);
+        rows = od.tokens.length ? pvRowsFromTokens(od.tokens) : [];
+        if(!rows.length) rows=parseProvText(od.text);
         el.textContent='↑ Cargar archivo(s) del Proveedor';
         if(!rows.length){
-          pvUpsertFile({name:file.name, tipo:'PDF·OCR', proveedor:detectProveedorInfo(ocrText,file.name).nombre, ruc:'', rows:[]});
-          pvEditFile(PV.provFiles[PV.provFiles.length-1].id);
-          showToast('⚠ '+file.name+': OCR sin facturas — cargá manualmente');
+          await pvFallbackAIorManual(file, od.text, 'PDF·OCR', null, el);
           resolve(); return;
         }
-        pvApplyParsedRows(rows, ocrText, file, 'PDF·OCR');
+        pvApplyParsedRows(rows, od.text, file, 'PDF·OCR');
         resolve();
       }catch(err){
         el.textContent='↑ Cargar archivo(s) del Proveedor';
@@ -4840,16 +5049,15 @@ function loadProvImage(file){
   var el=document.getElementById('b-pv-prov');
   el.textContent='⏳ '+file.name+' — OCR…';
   showToast('⏳ OCR en curso — la primera vez tarda unos segundos (descarga el motor)…');
-  return pvOcr(url,function(pct){ el.textContent='⏳ '+file.name+' — OCR '+pct+'%…'; })
-    .then(function(text){
+  return pvToCanvas(url).catch(function(){ return url; })
+    .then(function(src){ return pvOcrData(src,function(pct){ el.textContent='⏳ '+file.name+' — OCR '+pct+'%…'; }); })
+    .then(async function(data){
       el.textContent='↑ Cargar archivo(s) del Proveedor';
-      var rows=parseProvText(text);
-      if(!rows.length){
-        pvUpsertFile({name:file.name, tipo:'IMG·OCR', proveedor:detectProveedorInfo(text,file.name).nombre, ruc:'', rows:[], previewUrl:url});
-        pvEditFile(PV.provFiles[PV.provFiles.length-1].id);
-        showToast('⚠ '+file.name+': OCR sin facturas — cargá manualmente');
-        return;
-      }
+      var text=data.text||'';
+      var toks=pvWordsToTokens(data,0);
+      var rows = toks.length ? pvRowsFromTokens(toks) : [];
+      if(!rows.length) rows=parseProvText(text);
+      if(!rows.length){ await pvFallbackAIorManual(file, text, 'IMG·OCR', url, el); return; }
       pvApplyParsedRows(rows, text, file, 'IMG·OCR', url);
     })
     .catch(function(err){
