@@ -4700,10 +4700,21 @@ function loadProvExcel(file){
         var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
         if(!data.length){ showToast('⚠ '+file.name+': archivo vacío'); resolve(); return; }
         var headers=data[0];
-        var colNro=detectCol(headers,['factura','nro','numero','comprobante','n°','nº','doc','timbrado']);
-        var colMonto=detectCol(headers,['monto','importe','total','valor','amount','subtotal']);
-        var colFecha=detectCol(headers,['fecha','date','fec']);
-        if(colNro<0||colMonto<0){ showToast('⚠ '+file.name+': no se detectaron columnas de factura/monto'); resolve(); return; }
+        var colNro=detectCol(headers,['factura','nro','numero','comprobante','n°','nº','doc','timbrado','documento']);
+        var colMonto=detectCol(headers,['monto','importe','total','valor','amount','subtotal','importe total','total a pagar','saldo']);
+        var colFecha=detectCol(headers,['fecha','date','fec','emision','emisión']);
+        if(colNro<0||colMonto<0){
+          // Encabezados no estándar → lectura flexible: parsear TODAS las filas como texto
+          var flexLines=data.map(function(r){ return r.map(function(c){return c==null?'':String(c);}).join('   '); });
+          var flexRows=pvRowsFromLines(flexLines);
+          if(flexRows.length){
+            var infoF=detectProveedorInfo(data.slice(0,6).map(function(r){return r.join(' ');}).join('\n'), file.name);
+            pvUpsertFile({name:file.name, tipo:'Excel', proveedor:infoF.nombre, ruc:infoF.ruc, rows:flexRows});
+            showToast('✓ ['+infoF.nombre+'] '+flexRows.length+' facturas (Excel · lectura flexible)');
+            resolve(); return;
+          }
+          showToast('⚠ '+file.name+': no se detectaron columnas de factura/monto'); resolve(); return;
+        }
         var rows=data.slice(1).filter(function(r){return r[colNro]&&String(r[colNro]).trim();}).map(function(r){
           var raw=String(r[colNro]||'').trim();
           return {nro:normNroFactura(raw),nroRaw:raw,fecha:String(r[colFecha]||''),monto:parseMonto(r[colMonto])};
