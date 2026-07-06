@@ -4652,6 +4652,19 @@ function detectCol(headers, keywords) {
   return -1;
 }
 
+// Detección de columna con exclusiones: evita, p.ej., que "FECHA DE FACTURA" (contiene
+// "factura") sea tomada como columna de N° de factura, o que "NUMERO DE PEDIDO" lo sea.
+function detectColEx(headers, includes, excludes) {
+  var h = headers.map(function(x){ return String(x||'').toLowerCase(); });
+  excludes = excludes || [];
+  for(var k=0;k<includes.length;k++){
+    for(var i=0;i<h.length;i++){
+      if(h[i].indexOf(includes[k])>=0 && !excludes.some(function(x){return h[i].indexOf(x)>=0;})) return i;
+    }
+  }
+  return -1;
+}
+
 // Montos en Guaraníes (enteros). Tolera . , y espacio como separador de miles;
 // descarta una cola decimal de 1-2 dígitos (centavos) sólo si hay miles antes.
 function parseMonto(s){
@@ -4700,9 +4713,12 @@ function loadProvExcel(file){
         var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
         if(!data.length){ showToast('⚠ '+file.name+': archivo vacío'); resolve(); return; }
         var headers=data[0];
-        var colNro=detectCol(headers,['factura','nro','numero','comprobante','n°','nº','doc','timbrado','documento']);
-        var colMonto=detectCol(headers,['monto','importe','total','valor','amount','subtotal','importe total','total a pagar','saldo']);
-        var colFecha=detectCol(headers,['fecha','date','fec','emision','emisión']);
+        // N° de factura: preferir "factura legal"/"comprobante"; excluir columnas de fecha, pedido, días, etc.
+        var NRO_EXCL=['fecha','pedido','vencim','dias','día','condicion','condición','razon','razón','monto','importe','saldo','total'];
+        var colNro=detectCol(headers,['factura legal','comprobante','numero de factura','nro factura','n° factura','nº factura']);
+        if(colNro<0) colNro=detectColEx(headers,['factura','timbrado','documento','numero','numer','nro','n°','nº','doc'], NRO_EXCL);
+        var colMonto=detectColEx(headers,['monto','importe total','importe','total a pagar','total','debe','valor','subtotal','amount','saldo'],['dias','día','pedido','vencidos','fecha','factura','numero','nro']);
+        var colFecha=detectCol(headers,['fecha','date','fec','emision','emisión','vencim']);
         if(colNro<0||colMonto<0){
           // Encabezados no estándar → lectura flexible: parsear TODAS las filas como texto
           var flexLines=data.map(function(r){ return r.map(function(c){return c==null?'':String(c);}).join('   '); });
@@ -4826,24 +4842,33 @@ function pvRowsFromTokens(tokens){
   return pvRowsFromLines(lines.map(function(l){ return l.items.map(function(t){return t.s;}).join(' '); }));
 }
 function pvDetectColumns(lines){
-  var nroKeys=['factura','comprobante','numero','número','nro','timbrado','n°','nº','doc'];
-  var montoKeys=['importe','monto','total','debe','valor','subtotal'];
-  var fechaKeys=['fecha','emision','emisión'];
-  var otherKeys=['saldo','balance','haber','credito','crédito','iva','ret','concepto','detalle','descrip','gravad','exenta'];
+  // Precedencia: fecha y "otros" (saldo/pedido/días) se detectan ANTES que factura, para que
+  // "FECHA DE FACTURA" no sea tomada como N° de factura. Para el N° se prefiere una señal fuerte
+  // ("legal"/"comprobante"/"timbrado") sobre la débil ("factura"/"numero"/"nro").
+  var reFecha=/fecha|emisi|vencim/;
+  var reOther=/saldo|balance|haber|cr[eé]dito|pedido|d[ií]a|condic|raz[oó]n|social|concepto|detalle|descrip|gravad|exenta|\biva\b|\bret\b|vencid/;
+  var reMonto=/monto|importe|debe|subtotal|a\s*pagar/;
+  var reStrong=/legal|comprob|timbrado|documento/;
+  var reWeak=/factura|numero|número|nro|n°|nº/;
   for(var i=0;i<lines.length;i++){
-    var cols=[], hasNro=false, hasMonto=false;
+    var fechaX=null, montoX=null, strongX=null, weakX=null, others=[];
     lines[i].items.forEach(function(t){
-      var low=t.s.toLowerCase(), role=null;
-      if(nroKeys.some(function(k){return low.indexOf(k)>=0;})) role='nro';
-      else if(fechaKeys.some(function(k){return low.indexOf(k)>=0;})) role='fecha';
-      else if(montoKeys.some(function(k){return low.indexOf(k)>=0;})) role='monto';
-      else if(otherKeys.some(function(k){return low.indexOf(k)>=0;})) role='other';
-      if(!role) return;
-      if(role==='nro'){ if(hasNro) role='other'; else hasNro=true; }
-      if(role==='monto'){ if(hasMonto) role='other'; else hasMonto=true; }
-      cols.push({x:t.x, role:role});
+      var w=t.s.toLowerCase();
+      if(reFecha.test(w)){ if(fechaX===null) fechaX=t.x; else others.push(t.x); return; }
+      if(reOther.test(w)){ others.push(t.x); return; }
+      if(reMonto.test(w) || w==='total' || w==='valor'){ if(montoX===null) montoX=t.x; else others.push(t.x); return; }
+      if(reStrong.test(w)){ if(strongX===null) strongX=t.x; return; }
+      if(reWeak.test(w)){ if(weakX===null) weakX=t.x; return; }
     });
-    if(hasNro && hasMonto) return {cols:cols, headerIdx:i};
+    var nroX = strongX!==null ? strongX : weakX;
+    if(nroX!==null && montoX!==null){
+      var cols=[{x:nroX,role:'nro'},{x:montoX,role:'monto'}];
+      if(fechaX!==null) cols.push({x:fechaX,role:'fecha'});
+      others.forEach(function(x){
+        if(Math.abs(x-nroX)>1 && Math.abs(x-montoX)>1 && (fechaX===null||Math.abs(x-fechaX)>1)) cols.push({x:x,role:'other'});
+      });
+      return {cols:cols, headerIdx:i};
+    }
   }
   return null;
 }
