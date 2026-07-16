@@ -2386,8 +2386,8 @@ function checkRun(){
 function fechaToISO(f){
   if(!f) return '';
   var s = String(f).trim();
-  var dm = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if(dm) return dm[3]+'-'+dm[2]+'-'+dm[1];
+  var dm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(dm) return dm[3]+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0');
   return s.split(' ')[0]; // already ISO or date-only portion
 }
 function num(v){

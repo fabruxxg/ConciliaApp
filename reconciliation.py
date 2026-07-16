@@ -75,9 +75,9 @@ def excel_date_to_str(v) -> str:
     s = str(v).strip()
     if re.match(r'^\d{4}-\d{2}-\d{2}', s):
         return s.split(' ')[0]
-    m = re.match(r'^(\d{2})/(\d{2})/(\d{4})', s)
+    m = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})', s)
     if m:
-        return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+        return f"{m.group(3)}-{m.group(2).zfill(2)}-{m.group(1).zfill(2)}"
     try:
         n = float(s)
         if n > 1000:
@@ -122,13 +122,13 @@ def concil_infornet(portal_bytes: bytes, sys_bytes: bytes) -> list:
 
     s_map: dict = {}
     for r in sys_filtered:
-        t = str(r.get('Transacción', '')).strip().rstrip('.0')
+        t = re.sub(r'\.0$', '', str(r.get('Transacción', '')).strip())
         if t:
             s_map.setdefault(t, []).append(r)
 
     results = []
     for r in portal:
-        trx = str(r.get('Nro. transaccion', '')).strip().rstrip('.0')
+        trx = re.sub(r'\.0$', '', str(r.get('Nro. transaccion', '')).strip())
         imp = num(r.get('Importe', 0))
         s_arr = s_map.get(trx, [])
         i_s = sum(num(x.get('Importe Total', 0)) for x in s_arr) if s_arr else None
